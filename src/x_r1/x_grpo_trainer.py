@@ -430,16 +430,16 @@ class XGRPOTrainer(GRPOTrainer):
             if self.accelerator.is_main_process:
                 outputs = self.llm.generate(all_prompts_text, sampling_params=self.sampling_params, use_tqdm=False)
                 completion_ids = [out.token_ids for completions in outputs for out in completions.outputs]
-                for output in outputs:
-                    print('-'*100)
-                    print('\n\n\n')
-                    prompt = output.prompt
-                    for output_t in  output.outputs:
+                #for output in outputs:
+                    #print('-'*100)
+                    #print('\n\n\n')
+                    #prompt = output.prompt
+                    #for output_t in  output.outputs:
                         # print(completion_ids)
-                        print('='*100)
-                        generated_text = output_t.text
-                        print("【USER】: ", prompt )
-                        print("\n【ASSISTANT】:", generated_text)
+                        #print('='*100)
+                        #generated_text = output_t.text
+                        #print("【USER】: ", prompt )
+                        #print("\n【ASSISTANT】:", generated_text)
             else:
                 completion_ids = [None] * len(all_prompts_text)
             # Broadcast the completions from the main process to all processes, ensuring each process receives its
@@ -474,10 +474,10 @@ class XGRPOTrainer(GRPOTrainer):
 
             prompt_string = self.processing_class.batch_decode(prompt_ids, skip_special_tokens=True)
             output_string = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
-            for prompt, completion in zip(prompt_string, output_string):
-                print('='*100)
-                print("【USER】: ", prompt )
-                print("\n【ASSISTANT】:", completion)
+            #for prompt, completion in zip(prompt_string, output_string):
+            #    print('='*100)
+            #    print("【USER】: ", prompt )
+            #    print("\n【ASSISTANT】:", completion)
 
         # Mask everything after the first EOS token
         is_eos = completion_ids == self.processing_class.eos_token_id
@@ -574,7 +574,7 @@ class XGRPOTrainer(GRPOTrainer):
 
         self._metrics["reward"].append(rewards.mean().item())
         self._metrics["reward_std"].append(std_grouped_rewards.mean().item())
-
+        rewards = rewards[process_slice]
         if (
             self.log_completions
             and self.state.global_step % self.args.logging_steps == 0
@@ -601,6 +601,7 @@ class XGRPOTrainer(GRPOTrainer):
             "completion_mask": completion_mask,
             "ref_per_token_logps": ref_per_token_logps,
             "advantages": advantages,
+            'rewards': rewards
         }
 
 
@@ -616,6 +617,21 @@ class XGRPOTrainer(GRPOTrainer):
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
 
         per_token_logps = self._get_per_token_logps(model, input_ids, attention_mask, logits_to_keep)
+        #ref_per_token_logps = inputs["ref_per_token_logps"]
+        #mean_ppl_ref = ((ref_per_token_logps * completion_mask).sum(dim=1) / completion_mask.sum(dim=1))
+        
+        #mean_ppl = (per_token_logps * completion_mask).sum(dim=1) / completion_mask.sum(dim=1)
+        
+        #std_ppl_ref =torch.sqrt(((ref_per_token_logps - mean_ppl_ref.unsqueeze(1)) ** 2 * completion_mask).sum(dim=1) / completion_mask.sum(dim=1).clamp(min=1))
+        
+        #std_ppl = torch.sqrt(((per_token_logps - mean_ppl.unsqueeze(1)) ** 2 * completion_mask).sum(dim=1) / completion_mask.sum(dim=1).clamp(min=1))
+        
+         
+        #self._metrics["mean_ppl_ref"].append(self.accelerator.gather_for_metrics(mean_ppl_ref).mean().item())
+        #self._metrics["mean_ppl"].append(self.accelerator.gather_for_metrics(mean_ppl).mean().item())
+        #self._metrics["std_ppl_ref"].append(self.accelerator.gather_for_metrics(std_ppl_ref).mean().item())
+        #self._metrics["std_ppl"].append(self.accelerator.gather_for_metrics(std_ppl).mean().item())
+        
 
         # Compute the KL divergence between the model and the reference model
         ref_per_token_logps = inputs["ref_per_token_logps"]
