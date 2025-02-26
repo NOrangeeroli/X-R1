@@ -430,16 +430,16 @@ class XGRPOTrainer(GRPOTrainer):
             if self.accelerator.is_main_process:
                 outputs = self.llm.generate(all_prompts_text, sampling_params=self.sampling_params, use_tqdm=False)
                 completion_ids = [out.token_ids for completions in outputs for out in completions.outputs]
-                #for output in outputs:
-                    #print('-'*100)
+                for output in outputs:
+                    print('-'*100)
                     #print('\n\n\n')
-                    #prompt = output.prompt
-                    #for output_t in  output.outputs:
+                    prompt = output.prompt
+                    for output_t in  output.outputs:
                         # print(completion_ids)
-                        #print('='*100)
-                        #generated_text = output_t.text
-                        #print("【USER】: ", prompt )
-                        #print("\n【ASSISTANT】:", generated_text)
+                        print('='*100)
+                        generated_text = output_t.text
+                        print("【USER】: ", prompt )
+                        print("\n【ASSISTANT】:", generated_text)
             else:
                 completion_ids = [None] * len(all_prompts_text)
             # Broadcast the completions from the main process to all processes, ensuring each process receives its
@@ -474,10 +474,10 @@ class XGRPOTrainer(GRPOTrainer):
 
             prompt_string = self.processing_class.batch_decode(prompt_ids, skip_special_tokens=True)
             output_string = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
-            #for prompt, completion in zip(prompt_string, output_string):
-            #    print('='*100)
-            #    print("【USER】: ", prompt )
-            #    print("\n【ASSISTANT】:", completion)
+            for prompt, completion in zip(prompt_string, output_string):
+                print('='*100)
+                print("【USER】: ", prompt )
+                print("\n【ASSISTANT】:", completion)
 
         # Mask everything after the first EOS token
         is_eos = completion_ids == self.processing_class.eos_token_id
