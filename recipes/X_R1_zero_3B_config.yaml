@@ -22,7 +22,7 @@ vllm_device: auto
 vllm_gpu_memory_utilization: 0.7
 do_eval: false
 eval_strategy: "steps"
-eval_steps: 30
+eval_steps: 1
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
