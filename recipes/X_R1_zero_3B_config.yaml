@@ -22,7 +22,7 @@ vllm_device: auto
 vllm_gpu_memory_utilization: 0.7
 do_eval: false
 eval_strategy: "steps"
-eval_steps: 1
+eval_steps: 30
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
@@ -35,6 +35,7 @@ log_completions: true
 lr_scheduler_type: cosine
 max_prompt_length: 256
 num_generations: 6
+temperature: 0.9
 max_completion_length: 1024
 max_steps: -1
 num_train_epochs: 3
@@ -49,4 +50,5 @@ save_strategy: "epoch"
 save_steps: 100
 seed: 42
 warmup_ratio: 0.1
+
 #beta: 0.0

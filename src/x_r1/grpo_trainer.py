@@ -926,6 +926,9 @@ class GRPOTrainer(Trainer):
         
         # Reshape to group by prompt
         batch_size = hidden_states.size(0)
+        if batch_size < self.num_generations:
+            print(f"Warning: Batch size {batch_size} too small for diversity metrics with {self.num_generations} generations")
+            return
         num_prompts = batch_size // self.num_generations
         grouped_states = hidden_states.view(num_prompts, self.num_generations, -1)
         grouped_advantages = advantages.view(num_prompts, self.num_generations)
