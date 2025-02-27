@@ -20,9 +20,9 @@ from dataclasses import dataclass, field
 import datasets
 import torch
 import transformers
-from datasets import load_dataset
-from datasets.xdg.dataset import XDGDataset
-from datasets.registry import get_dataset_class, get_reward_class
+from dataset.xdg.dataset import XDGDataset
+from dataset.xdg.reward import XDGReward
+from dataset.registry import get_dataset_class, get_reward_class
 from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoModelForCausalLM, AutoTokenizer

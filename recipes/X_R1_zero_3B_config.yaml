@@ -17,7 +17,7 @@ max_train_samples: 300
 max_val_samples: 50
 
 # GRPO trainer config
-wandb_project: "X-R1"
+wandb_project: "X-R1-dev"
 bf16: true
 use_vllm: true
 vllm_device: auto
