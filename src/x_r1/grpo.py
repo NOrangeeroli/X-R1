@@ -62,6 +62,14 @@ def init_wandb_training(training_args):
 
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
+    max_train_samples: int = field(
+        default=-1,
+        metadata={"help": "The maximum number of samples to load from the dataset."}
+    )
+    max_test_samples: int = field(  # type: ignore  
+        default=-1,
+        metadata={"help": "The maximum number of samples to load from the dataset."}
+    )
     reward_funcs: list[str] = field(
         default_factory=lambda: ["accuracy", "format"],
         metadata={
@@ -142,7 +150,7 @@ def main(script_args, training_args, model_args):
     # Load the dataset
     
     dataset = get_dataset_class(script_args.dataset_name)().load_dataset(
-        script_args.dataset_name, script_args.dataset_config, script_args.max_samples
+        script_args.dataset_name, script_args.dataset_config, script_args.max_train_samples, script_args.max_test_samples
     )
 
    
