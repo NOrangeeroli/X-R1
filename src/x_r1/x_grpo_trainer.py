@@ -554,7 +554,7 @@ class XGRPOTrainer(GRPOTrainer):
         # Normalize the rewards to compute the advantages
         mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-        advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+        advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-2)
 
         # Slice to keep only the local part of the data
         process_slice = slice(
@@ -634,6 +634,7 @@ class XGRPOTrainer(GRPOTrainer):
         
 
         # Compute the KL divergence between the model and the reference model
+        
         ref_per_token_logps = inputs["ref_per_token_logps"]
         per_token_kl = torch.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1
 

@@ -37,6 +37,7 @@ from rewards import (
 )
 from utils.callbacks import get_callbacks
 from x_grpo_trainer import XGRPOTrainer
+from grpo_trainer import GRPOTrainer
 from trl import ModelConfig, ScriptArguments, TrlParser, get_peft_config
 from peft import LoraConfig, PeftModel, get_peft_model
 
@@ -214,13 +215,18 @@ def main(script_args, training_args, model_args):
     #############################
     # Initialize the XGRPO trainer
     #############################
-    trainer = XGRPOTrainer(
+    eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
+    if training_args.eval_strategy != "no":
+        eval_dataset = eval_dataset.select(range(min(50, len(eval_dataset))))
+    train_dataset=dataset[script_args.dataset_train_split]
+    train_dataset = train_dataset.select(range(min(300, len(train_dataset))))
+    trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
         # model = model,
         reward_funcs=reward_funcs,
         args=training_args,
-        train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         peft_config=get_peft_config(model_args), # LoRA parameter
         callbacks=get_callbacks(training_args, model_args),
     )
