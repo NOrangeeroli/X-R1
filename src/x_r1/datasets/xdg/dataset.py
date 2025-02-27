@@ -18,14 +18,13 @@ class XDGDataset:
     def load_dataset(
         dataset_name: str,
         dataset_config: Optional[str] = None,
-        split: Optional[str] = None,
         max_samples: Optional[int] = None,
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
         """
         Load the dataset from HuggingFace or local source
         """
-        dataset = load_dataset(dataset_name, dataset_config, split=split)
+        dataset = load_dataset(dataset_name, name = dataset_config)
         
         # Apply filtering or selection if needed
         if max_samples and max_samples > 0:
