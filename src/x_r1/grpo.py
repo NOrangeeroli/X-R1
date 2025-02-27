@@ -21,6 +21,8 @@ import datasets
 import torch
 import transformers
 from datasets import load_dataset
+from datasets.xdg.dataset import XDGDataset
+from datasets.registry import get_dataset_class, get_reward_class
 from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -98,13 +100,6 @@ class GRPOScriptArguments(ScriptArguments):
 
 
 
-SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-    "<think> reasoning process here </think><answer> answer here </answer>"
-)
-
 
 def main(script_args, training_args, model_args):
     # Set seed for reproducibility
@@ -145,49 +140,35 @@ def main(script_args, training_args, model_args):
         init_wandb_training(training_args)
 
     # Load the dataset
-    dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
+    
+    dataset = get_dataset_class(script_args.dataset_name)().load_dataset(
+        script_args.dataset_name, script_args.dataset_config, script_args.max_samples
+    )
 
-    # align the dataset
-    if script_args.dataset_name == "FreedomIntelligence/medical-o1-verifiable-problem":
-        dataset = dataset.rename_columns({
-            "Open-ended Verifiable Question": "problem",
-            "Ground-True Answer": "solution"
-        })
+   
 
     # Get reward functions
+    reward_class = get_reward_class(script_args.dataset_name)
     REWARD_FUNCS_REGISTRY = {
-        "accuracy": accuracy_reward,
-        "format": format_reward,
-        "reasoning_steps": reasoning_steps_reward,
-        "cosine": get_cosine_scaled_reward(
-            min_value_wrong=script_args.cosine_min_value_wrong,
-            max_value_wrong=script_args.cosine_max_value_wrong,
-            min_value_correct=script_args.cosine_min_value_correct,
-            max_value_correct=script_args.cosine_max_value_correct,
-            max_len=script_args.cosine_max_len,
-        ),
-        "repetition_penalty": get_repetition_penalty_reward(
-            ngram_size=script_args.repetition_n_grams,
-            max_penalty=script_args.repetition_max_penalty,
-        ),
-        "length": len_reward,
+        "accuracy": reward_class.accuracy_reward,
+        "format": reward_class.format_reward,
+        # "reasoning_steps": reasoning_steps_reward,
+        # "cosine": get_cosine_scaled_reward(
+        #     min_value_wrong=script_args.cosine_min_value_wrong,
+        #     max_value_wrong=script_args.cosine_max_value_wrong,
+        #     min_value_correct=script_args.cosine_min_value_correct,
+        #     max_value_correct=script_args.cosine_max_value_correct,
+        #     max_len=script_args.cosine_max_len,
+        # ),
+        # "repetition_penalty": get_repetition_penalty_reward(
+        #     ngram_size=script_args.repetition_n_grams,
+        #     max_penalty=script_args.repetition_max_penalty,
+        # ),
+        # "length": len_reward,
     }
     reward_funcs = [REWARD_FUNCS_REGISTRY[func] for func in script_args.reward_funcs]
 
-    # Format into conversation
-    def make_conversation(example):
-        return {
-            "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": example["problem"]},
-            ],
-        }
-
-    dataset = dataset.map(make_conversation)
-    for split in dataset:
-        if "messages" in dataset[split].column_names:
-            dataset[split] = dataset[split].remove_columns("messages")
-
+    
 
     logger.info("*** Initializing model kwargs ***")
     torch_dtype = (

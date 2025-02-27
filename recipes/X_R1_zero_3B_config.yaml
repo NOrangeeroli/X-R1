@@ -13,6 +13,7 @@ dataset_name: xiaodongguaAIGC/X-R1-750
 dataset_configs:
 - train
 num_processes: 3
+max_samples: 300
 
 # GRPO trainer config
 wandb_project: "X-R1"
