@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from accelerate.utils import get_accelerator
 import os
 import textwrap
 import warnings
@@ -898,7 +897,7 @@ class GRPOTrainer(Trainer):
         rewards = rewards[process_slice]
         
         if self.state.global_step % 5 == 0:
-            get_accelerator().empty_cache()
+            torch.cuda.empty_cache()
 
         return {
             "prompt_ids": prompt_ids,
@@ -1061,7 +1060,7 @@ class GRPOTrainer(Trainer):
         clip_ratio = (is_clipped * completion_mask).sum() / completion_mask.sum()
         self._metrics["clip_ratio"].append(self.accelerator.gather_for_metrics(clip_ratio).mean().item())
         if self.state.global_step % 3 == 0:
-            get_accelerator().empty_cache()
+            torch.cuda.empty_cache()
         
         return loss
 
@@ -1232,7 +1231,6 @@ class GRPOTrainer(Trainer):
             
     def training_step(self, model, inputs, num_items_in_batch):
         # Update temperature before each training step
-        get_accelerator().empty_cache()
         self.update_temperature()
         
         # Rest of training_step implementation
