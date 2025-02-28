@@ -7,6 +7,31 @@ deepspeed_config:
   zero3_init_flag: true
   zero3_save_16bit_model: true
   zero_stage: 3
+  # Stage 3 advanced parameters
+  stage3_prefetch_bucket_size: 5e7
+  stage3_param_persistence_threshold: 1e6
+  stage3_max_live_parameters: 1e9
+  
+  # Improve communication efficiency
+  communication_data_type: bf16
+  reduce_bucket_size: 5e8
+  
+  # Memory optimization
+  round_robin_gradients: true
+  
+  # Advanced optimizer settings
+  zero_optimization:
+    contiguous_gradients: true
+    overlap_comm: true
+    reduce_scatter: true
+    reduce_bucket_size: 5e8
+    allgather_bucket_size: 5e8
+ 
+
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+
 distributed_type: DEEPSPEED
 downcast_bf16: 'no'
 machine_rank: 0

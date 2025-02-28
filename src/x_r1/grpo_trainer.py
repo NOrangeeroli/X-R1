@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from accelerate.utils import get_accelerator
 import os
 import textwrap
 import warnings
@@ -266,7 +266,7 @@ class GRPOTrainer(Trainer):
             model_name = model if isinstance(model, str) else model.config._name_or_path
             model_name = model_name.split("/")[-1]
             args = GRPOConfig(f"{model_name}-GRPO")
-
+        self.advantage_offset = args.advantage_offset
         # Models
         # Trained model
         model_init_kwargs = args.model_init_kwargs or {}
@@ -634,7 +634,7 @@ class GRPOTrainer(Trainer):
         )
         # Get the last layer hidden states
         last_hidden_states = outputs.hidden_states[-1]
-        
+        del outputs
         # Extract only the completion portion
         completion_hidden_states = last_hidden_states[:, -completion_length:]
         completion_attention_mask = attention_mask[:, -completion_length:]
@@ -647,7 +647,7 @@ class GRPOTrainer(Trainer):
         # Multiply by mask before averaging to zero out padding tokens
         masked_states = completion_hidden_states * completion_attention_mask.unsqueeze(-1)
         averaged_states = masked_states.sum(dim=1) / sequence_lengths
-        
+        del masked_states, last_hidden_states
         return averaged_states
         
     
@@ -896,7 +896,9 @@ class GRPOTrainer(Trainer):
                     df = pd.DataFrame(table)
                     wandb.log({f"completions/step_{str(self.state.global_step)}": wandb.Table(dataframe=df)})
         rewards = rewards[process_slice]
-
+        
+        if self.state.global_step % 5 == 0:
+            get_accelerator().empty_cache()
 
         return {
             "prompt_ids": prompt_ids,
@@ -1045,6 +1047,8 @@ class GRPOTrainer(Trainer):
         entropy = -logps.mean()
         
         self._metrics["entropy"].append(entropy.item())
+        
+        
         hidden_states = inputs["completion_hidden_states"]
         self.log_diversity_metrics(self.accelerator.gather_for_metrics(hidden_states), self.accelerator.gather_for_metrics(inputs["rewards"]))
         
@@ -1056,6 +1060,9 @@ class GRPOTrainer(Trainer):
         is_clipped = (per_token_loss1 < per_token_loss2).float()
         clip_ratio = (is_clipped * completion_mask).sum() / completion_mask.sum()
         self._metrics["clip_ratio"].append(self.accelerator.gather_for_metrics(clip_ratio).mean().item())
+        if self.state.global_step % 3 == 0:
+            get_accelerator().empty_cache()
+        
         return loss
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys: Optional[list[str]] = None):
@@ -1225,6 +1232,7 @@ class GRPOTrainer(Trainer):
             
     def training_step(self, model, inputs, num_items_in_batch):
         # Update temperature before each training step
+        get_accelerator().empty_cache()
         self.update_temperature()
         
         # Rest of training_step implementation
