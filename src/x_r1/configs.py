@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass, field
+from typing import Dict, Any
 from typing import Optional
 
 import trl
@@ -25,6 +26,18 @@ class GRPOConfig(trl.GRPOConfig):
     """
     args for callbacks, benchmarks etc
     """
+    temperature_schedule: Optional[Dict[str, Any]] = field(
+        default=None,
+        metadata={
+            "help": (
+                "Temperature scheduling configuration. Dictionary with fields: "
+                "'type' ('linear', 'cosine', 'exponential', or 'step'), "
+                "'start' (initial temperature), 'end' (final temperature), "
+                "'total_steps' (for linear/cosine), 'decay_rate' (for exponential), "
+                "or 'steps' (list of [step, temp] pairs for step schedule)."
+            )
+        },
+    )
 
     benchmarks: list[str] = field(
         default_factory=lambda: [], metadata={"help": "The benchmarks to run after training."}

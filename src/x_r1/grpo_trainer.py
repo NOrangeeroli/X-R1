@@ -1137,3 +1137,91 @@ class GRPOTrainer(Trainer):
         )
 
         model_card.save(os.path.join(self.args.output_dir, "README.md"))
+    
+    
+    
+    
+    def update_temperature(self, current_step=None, current_epoch=None):
+        """
+        Update sampling temperature based on training progress.
+        
+        Args:
+            current_step: Current training step (optional)
+            current_epoch: Current training epoch (optional)
+        """
+        import math
+        if not hasattr(self.args, "temperature_schedule"):
+            # If no schedule, use the current temperature value
+            if self.use_vllm and hasattr(self, "sampling_params"):
+                new_temp = self.sampling_params.temperature
+            elif hasattr(self, "generation_config"):
+                new_temp = self.generation_config.temperature
+            else:
+                new_temp = self.args.temperature
+        
+        else:
+            schedule = self.args.temperature_schedule
+            if schedule is None:
+                return
+            
+            # Get current step/epoch if not provided
+            if current_step is None:
+                current_step = self.state.global_step
+            if current_epoch is None:
+                current_epoch = self.state.epoch
+            
+            # Calculate new temperature based on schedule type
+            if schedule["type"] == "linear":
+                progress = min(1.0, current_step / schedule["total_steps"])
+                start_temp = schedule["start"]
+                end_temp = schedule["end"]
+                new_temp = start_temp - (start_temp - end_temp) * progress
+            
+            elif schedule["type"] == "cosine":
+                progress = min(1.0, current_step / schedule["total_steps"])
+                start_temp = schedule["start"]
+                end_temp = schedule["end"]
+                cos_value = 0.5 * (1.0 + math.cos(math.pi * progress))
+                new_temp = end_temp + (start_temp - end_temp) * cos_value
+            
+            elif schedule["type"] == "exponential":
+                decay_rate = schedule["decay_rate"]
+                new_temp = schedule["start"] * (decay_rate ** current_step)
+                new_temp = max(new_temp, schedule.get("min", 0.1))
+            
+            elif schedule["type"] == "step":
+                new_temp = schedule["start"]
+                for step, temp in schedule["steps"]:
+                    if current_step >= step:
+                        new_temp = temp
+            
+            else:
+                raise ValueError(f"Unknown temperature schedule type: {schedule['type']}")
+        
+            # Update temperature in both vLLM and generation config
+            if self.use_vllm and hasattr(self, "sampling_params"):
+                self.sampling_params.temperature = new_temp
+                
+            if hasattr(self, "generation_config"):
+                self.generation_config.temperature = new_temp
+            
+            # Log the temperature change
+            if self.accelerator.is_main_process:
+                self._metrics["temperature"] = [new_temp]
+                # print(f"Step {current_step}: Updated temperature to {new_temp:.4f}")
+        # Log the temperature (append instead of overwrite)
+        if self.accelerator.is_main_process:
+            self._metrics["temperature"].append(new_temp)
+            
+            # # Only print changes if using a schedule
+            # if hasattr(self.args, "temperature_schedule") and self.args.temperature_schedule is not None:
+            #     print(f"Step {current_step}: Temperature is {new_temp:.4f}")
+            
+            
+    def training_step(self, model, inputs, num_items_in_batch):
+        # Update temperature before each training step
+        self.update_temperature()
+        
+        # Rest of training_step implementation
+        loss = super().training_step(model, inputs, num_items_in_batch)
+        return loss

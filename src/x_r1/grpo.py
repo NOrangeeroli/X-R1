@@ -219,7 +219,7 @@ def main(script_args, training_args, model_args):
     if training_args.eval_strategy != "no":
         eval_dataset = eval_dataset.select(range(min(50, len(eval_dataset))))
     train_dataset=dataset[script_args.dataset_train_split]
-    train_dataset = train_dataset.select(range(min(300, len(train_dataset))))
+    train_dataset = train_dataset.select(range(min(100, len(train_dataset))))
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
         # model = model,
