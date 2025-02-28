@@ -977,7 +977,7 @@ class GRPOTrainer(Trainer):
                 right_diversity = 1.0 - (sum_right_sim / (n_right * (n_right - 1)))
                 diversity_right_values.append(right_diversity.item())
             else:
-                diversity_right_values.append(0.0)
+                pass
         
         # Convert to tensors for proper gathering across processes
         if diversity_all_values:
@@ -988,7 +988,8 @@ class GRPOTrainer(Trainer):
         
         if diversity_right_values:
             
-            self._metrics["diversity_right"].append(torch.tensor(diversity_right_values).mean().item())
+            self._metrics["diversity_right"].append(torch.tensor(diversity_right_values).item())
+            
             
         
 
