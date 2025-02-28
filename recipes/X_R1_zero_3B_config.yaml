@@ -39,7 +39,8 @@ temperature: 0.9
 temperature_schedule:
   type: "step"
   start: 0.9
-  steps: [[1, 0.9]]
+  steps: [[12, 1.0], [24, 0.9], [36, 1.0], [48, 0.9], [60, 1.0], 
+    [72, 0.9], [84, 1.0], [96, 0.9], [108, 1.0]]
 max_completion_length: 1024
 max_steps: -1
 num_train_epochs: 10
