@@ -13,7 +13,7 @@ dataset_name: xiaodongguaAIGC/X-R1-750
 dataset_configs:
 - train
 num_processes: 3
-max_train_samples: 300
+max_train_samples: 100
 max_val_samples: 50
 
 # GRPO trainer config
@@ -45,7 +45,7 @@ temperature_schedule:
 advantage_offset: 0.0
 max_completion_length: 1024
 max_steps: -1
-num_train_epochs: 10
+num_train_epochs: 30
 output_dir: output/X-R1-3B
 overwrite_output_dir: true
 per_device_eval_batch_size: 2

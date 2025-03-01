@@ -25,7 +25,7 @@ class XDGReward:
         match = re.search(r'<answer>(.*?)</answer>', text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        return text.strip()
+        return ""
     
     @staticmethod
     def evaluate_answer_similarity(answer, solution):
@@ -68,30 +68,32 @@ class XDGReward:
             if len(gold_parsed) != 0:
                 # print('latex gold parsed')
                 # We require the answer to be provided in correct latex (no malformed operators)
+                answer_text = XDGReward.extract_answer(content)
                 answer_parsed = parse(
-                    content,
-                    extraction_config=[
-                        LatexExtractionConfig(
-                            normalization_config=NormalizationConfig(
-                                nits=False,
-                                malformed_operators=False,
-                                basic_latex=True,
-                                equations=True,
-                                boxed="all",
-                                units=True,
-                            ),
-                            # Ensures that boxed is tried first
-                            boxed_match_priority=0,
-                            try_extract_without_anchor=False,
-                        )
-                    ],
+                    answer_text,
+                    # extraction_config=[
+                    #     LatexExtractionConfig(
+                    #         normalization_config=NormalizationConfig(
+                    #             nits=False,
+                    #             malformed_operators=False,
+                    #             basic_latex=True,
+                    #             equations=True,
+                    #             boxed="all",
+                    #             units=True,
+                    #         ),
+                    #         # Ensures that boxed is tried first
+                    #         boxed_match_priority=0,
+                    #         try_extract_without_anchor=False,
+                    #     )
+                    # ],
                     extraction_mode="first_match",
                 )
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
                 reward = float(verify(answer_parsed, gold_parsed))
-                #print('\nprompt:', prompt)
+                # print('\nprompt:', prompt)
                 print('-'*100)
-                print('\nanswer_parsed:', answer_parsed, '\ngold_parsed:', gold_parsed, '\nreward:', reward)
+                print(f"\nanswer text: {answer_text}\n")
+                print('\nanswer_parsed:', answer_parsed, '\ngold_parsed:', gold_parsed, '\nreward:', reward, '\n')
             else:
                 # For medical text answers, extract from <answer> tags and use GPT4O-mini for evaluation
                 # answer_content = XDGReward.extract_answer(content)
