@@ -26,6 +26,14 @@ class GRPOConfig(trl.GRPOConfig):
     """
     args for callbacks, benchmarks etc
     """
+    
+    advantage_offset: float = field(
+        default=0.0,
+        metadata={
+            "help": "Value to subtract from advantages before computing loss. Higher values favor more conservative behavior."
+        }
+    )
+    
     temperature_schedule: Optional[Dict[str, Any]] = field(
         default=None,
         metadata={
