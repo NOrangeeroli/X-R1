@@ -43,6 +43,7 @@ temperature_schedule:
   start: 0.9
   steps: [[1, 0.9]] 
 advantage_offset: 0.0
+logp_variance_reg_coef: 0.01
 max_completion_length: 1024
 max_steps: -1
 num_train_epochs: 30

@@ -90,6 +90,10 @@ class XDGReward:
                 )
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
                 reward = float(verify(answer_parsed, gold_parsed))
+                if reward ==0:
+                    answer_parsed = parse(f"${XDGReward.normalize_text(answer_text)}$")
+                    reward = float(verify(answer_parsed, gold_parsed))
+                    
                 # print('\nprompt:', prompt)
                 print('-'*100)
                 print(f"\nanswer text: {answer_text}\n")

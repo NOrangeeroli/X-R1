@@ -266,6 +266,7 @@ class GRPOTrainer(Trainer):
             model_name = model_name.split("/")[-1]
             args = GRPOConfig(f"{model_name}-GRPO")
         self.advantage_offset = args.advantage_offset
+        self.logp_variance_reg_coef = args.logp_variance_reg_coef
         # Models
         # Trained model
         model_init_kwargs = args.model_init_kwargs or {}
@@ -1015,6 +1016,10 @@ class GRPOTrainer(Trainer):
             )
             per_token_kl = torch.clamp(per_token_kl, min=-10, max = 10)
 
+        seq_logps = (per_token_logps * completion_mask).sum(dim=1)
+        rewards = inputs["rewards"]
+        reg_term = self._calculate_logp_variance_regularization(gather(seq_logps), gather(rewards))
+
 
         # Compute the loss
         advantages = inputs["advantages"]
@@ -1035,9 +1040,7 @@ class GRPOTrainer(Trainer):
             per_token_loss = per_token_loss + self.beta * per_token_kl
         loss = (per_token_loss * completion_mask).sum() / completion_mask.sum()
         
-        
-        
-
+        loss += self.logp_variance_reg_coef * reg_term
         
 
         # Log the metrics
@@ -1059,10 +1062,61 @@ class GRPOTrainer(Trainer):
         is_clipped = (per_token_loss1 < per_token_loss2).float()
         clip_ratio = (is_clipped * completion_mask).sum() / completion_mask.sum()
         self._metrics["clip_ratio"].append(self.accelerator.gather_for_metrics(clip_ratio).mean().item())
+        
+        self._metrics["logp_variance_reg"].append(self.accelerator.gather_for_metrics(reg_term).mean().item())
         if self.state.global_step % 3 == 0:
             torch.cuda.empty_cache()
         
         return loss
+    def _calculate_logp_variance_regularization(self, seq_logps, rewards):
+        """
+        Calculate regularization term based on the variance of log probabilities
+        for completions with reward value of 2.
+        
+        Args:
+            seq_logps: Tensor of shape [batch_size] with sequence log probabilities
+            rewards: Tensor of shape [batch_size] with reward values
+            
+        Returns:
+            Regularization term (scalar tensor)
+        """
+        device = seq_logps.device
+        batch_size = seq_logps.size(0)
+        
+        # If batch size is not divisible by num_generations, something is wrong
+        if batch_size % self.num_generations != 0:
+            print(f"Warning: Batch size {batch_size} not divisible by num_generations {self.num_generations}")
+            return torch.tensor(0.0, device=device)
+        
+        num_prompts = batch_size // self.num_generations
+        
+        # Reshape to group by prompts: [num_prompts, num_generations]
+        grouped_logps = seq_logps.view(num_prompts, self.num_generations)
+        grouped_rewards = rewards.view(num_prompts, self.num_generations)
+        
+        # Calculate the regularization term for each prompt group
+        reg_values = []
+        
+        for i in range(num_prompts):
+            # Find completions with reward == 2
+            reward_mask = (grouped_rewards[i] == 2)
+            reward_2_logps = grouped_logps[i][reward_mask]
+            
+            # Only consider groups with at least 2 completions with reward 2
+            if reward_2_logps.size(0) >= 2:
+                max_logp = reward_2_logps.max()
+                min_logp = reward_2_logps.min()
+                diff_squared = (max_logp - min_logp) ** 2
+                reg_values.append(diff_squared)
+            else:
+                reg_values.append(torch.tensor(0.0, device=device))
+        
+        # Convert to tensor and calculate mean
+        if reg_values:
+            reg_tensor = torch.stack(reg_values)
+            return reg_tensor.mean()
+        else:
+            return torch.tensor(0.0, device=device)
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys: Optional[list[str]] = None):
         inputs = self._prepare_inputs(inputs)
