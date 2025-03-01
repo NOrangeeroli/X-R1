@@ -1018,7 +1018,7 @@ class GRPOTrainer(Trainer):
 
         seq_logps = (per_token_logps * completion_mask).sum(dim=1)
         rewards = inputs["rewards"]
-        reg_term = self._calculate_logp_variance_regularization(gather(seq_logps), gather(rewards))
+        reg_term = self._calculate_logp_variance_regularization(seq_logps, rewards)
 
 
         # Compute the loss
@@ -1045,7 +1045,7 @@ class GRPOTrainer(Trainer):
 
         # Log the metrics
         logps = (per_token_logps * completion_mask).sum(dim = -1)
-        logps = gather(logps)
+        logps = self.accelerator.gather_for_metrics(logps)
         entropy = -logps.mean()
         
         self._metrics["entropy"].append(entropy.item())
@@ -1080,6 +1080,8 @@ class GRPOTrainer(Trainer):
         Returns:
             Regularization term (scalar tensor)
         """
+        seq_logps = gather(seq_logps)
+        rewards = gather(rewards)
         device = seq_logps.device
         batch_size = seq_logps.size(0)
         
@@ -1095,28 +1097,44 @@ class GRPOTrainer(Trainer):
         grouped_rewards = rewards.view(num_prompts, self.num_generations)
         
         # Calculate the regularization term for each prompt group
-        reg_values = []
+        reg_values = torch.zeros_like(grouped_logps, device=device)
         
         for i in range(num_prompts):
             # Find completions with reward == 2
             reward_mask = (grouped_rewards[i] == 2)
-            reward_2_logps = grouped_logps[i][reward_mask]
+            reward_2_count = reward_mask.sum()
             
             # Only consider groups with at least 2 completions with reward 2
-            if reward_2_logps.size(0) >= 2:
-                max_logp = reward_2_logps.max()
-                min_logp = reward_2_logps.min()
-                diff_squared = (max_logp - min_logp) ** 2
-                reg_values.append(diff_squared)
+            if reward_2_count >= 2:
+            
+                # Get only the reward==2 logps using masked_select which is gradient-friendly
+                reward_2_logps = torch.masked_select(grouped_logps[i], reward_mask)
+                
+                # Calculate mean without indexing
+                mean_logp = reward_2_logps.mean()
+                
+                # Create a tensor same shape as grouped_logps[i] with the mean value
+                # where the mask is True, and zeros elsewhere
+                mean_tensor = reward_mask.float() * mean_logp
+                
+                # Calculate the deviation from mean for all values, will be zero where mask is False
+                deviation = grouped_logps[i] - mean_tensor
+                
+                # Only keep deviations where mask is True
+                deviation = deviation * reward_mask.float()
+                
+                # Store in the result tensor
+                reg_values[i] = deviation
+            
             else:
-                reg_values.append(torch.tensor(0.0, device=device))
-        
-        # Convert to tensor and calculate mean
-        if reg_values:
-            reg_tensor = torch.stack(reg_values)
-            return reg_tensor.mean()
-        else:
-            return torch.tensor(0.0, device=device)
+                reg_values[i] = 0
+        # process_slice = slice(
+        #         self.accelerator.process_index * num_prompts,
+        #         (self.accelerator.process_index + 1) * num_prompts,
+        #     )
+        squared_reg = (reg_values ** 2)
+        local_reg = squared_reg.mean()
+        return local_reg
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys: Optional[list[str]] = None):
         inputs = self._prepare_inputs(inputs)
