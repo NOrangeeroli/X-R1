@@ -1016,7 +1016,7 @@ class GRPOTrainer(Trainer):
             )
             per_token_kl = torch.clamp(per_token_kl, min=-10, max = 10)
 
-        seq_logps = (per_token_logps * completion_mask).sum(dim=1)
+        seq_logps = (per_token_logps * completion_mask).sum(dim=1) / completion_mask.sum(dim=1)
         rewards = inputs["rewards"]
         reg_term = self._calculate_logp_variance_regularization(seq_logps, rewards)
 
@@ -1040,7 +1040,7 @@ class GRPOTrainer(Trainer):
             per_token_loss = per_token_loss + self.beta * per_token_kl
         loss = (per_token_loss * completion_mask).sum() / completion_mask.sum()
         
-        # loss += self.logp_variance_reg_coef * reg_term
+        loss += self.logp_variance_reg_coef * reg_term
         
 
         # Log the metrics
