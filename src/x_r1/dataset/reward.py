@@ -5,7 +5,7 @@ from openai import OpenAI
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 
-class XDGReward:
+class Reward:
     """Reward functions for the XDG dataset"""
     
     @staticmethod
@@ -25,7 +25,7 @@ class XDGReward:
         match = re.search(r'<answer>(.*?)</answer>', text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        return text.strip()
+        return ""
     
     @staticmethod
     def evaluate_answer_similarity(answer, solution):
@@ -50,7 +50,7 @@ class XDGReward:
         except Exception as e:
             print(f"Error in GPT evaluation: {e}")
             # If API call fails, fall back to simple text matching
-            return 1.0 if XDGReward.normalize_text(answer) == XDGReward.normalize_text(solution) else 0.0
+            return 1.0 if Reward.normalize_text(answer) == Reward.normalize_text(solution) else 0.0
     
     
     @staticmethod
@@ -65,40 +65,57 @@ class XDGReward:
                 extraction_mode="first_match",
                 extraction_config=[LatexExtractionConfig()],
             )
-            if len(gold_parsed) != 0:
+            gold_parsed2 = parse(
+                f"${sol}$",
+                extraction_mode="first_match",
+                extraction_config=[LatexExtractionConfig()],
+            )
+            if len(gold_parsed) != 0 or len(gold_parsed2) != 0:
                 # print('latex gold parsed')
                 # We require the answer to be provided in correct latex (no malformed operators)
+                answer_text = Reward.extract_answer(content)
                 answer_parsed = parse(
-                    content,
-                    extraction_config=[
-                        LatexExtractionConfig(
-                            normalization_config=NormalizationConfig(
-                                nits=False,
-                                malformed_operators=False,
-                                basic_latex=True,
-                                equations=True,
-                                boxed="all",
-                                units=True,
-                            ),
-                            # Ensures that boxed is tried first
-                            boxed_match_priority=0,
-                            try_extract_without_anchor=False,
-                        )
-                    ],
+                    answer_text,
+                    # extraction_config=[
+                    #     LatexExtractionConfig(
+                    #         normalization_config=NormalizationConfig(
+                    #             nits=False,
+                    #             malformed_operators=False,
+                    #             basic_latex=True,
+                    #             equations=True,
+                    #             boxed="all",
+                    #             units=True,
+                    #         ),
+                    #         # Ensures that boxed is tried first
+                    #         boxed_match_priority=0,
+                    #         try_extract_without_anchor=False,
+                    #     )
+                    # ],
                     extraction_mode="first_match",
                 )
+                answer_parsed2 = parse(f"${Reward.normalize_text(answer_text)}$")
                 # Reward 1 if the content is the same as the ground truth, 0 otherwise
-                reward = float(verify(answer_parsed, gold_parsed))
-                #print('\nprompt:', prompt)
+                reward = 0.0
+                for g in [gold_parsed, gold_parsed2]:
+                    for a in [answer_parsed, answer_parsed2]:
+                        if verify(a, g) == 1:
+                            reward = 1.0
+                            break
+                
+                    
+                    
+                # print('\nprompt:', prompt)
                 print('-'*100)
-                print('\nanswer_parsed:', answer_parsed, '\ngold_parsed:', gold_parsed, '\nreward:', reward)
+                print(f"\nanswer text: {answer_text}\n")
+                print(f"\solution text: {sol}\n")
+                print('\nanswer_parsed:', answer_parsed, '\ngold_parsed:', gold_parsed, '\nreward:', reward, '\n')
             else:
                 # For medical text answers, extract from <answer> tags and use GPT4O-mini for evaluation
                 # answer_content = XDGReward.extract_answer(content)
                 # normalized_content = XDGReward.normalize_text(answer_content)
                 # normalized_solution = XDGReward.normalize_text(sol)
                 # reward = XDGReward.evaluate_answer_similarity(normalized_content, normalized_solution)
-                assert False
+                reward = 0.0
             rewards.append(reward)
 
         #print('\naccuracy rewards:', rewards)
@@ -119,4 +136,3 @@ class XDGReward:
 
         rewards = [1.0 if match else 0.0 for match in matches]
         return rewards
-

@@ -9,21 +9,23 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Data training arguments
-dataset_name: xiaodongguaAIGC/X-R1-750
+eval_dataset_name: HuggingFaceH4/aime_2024
+dataset_name: SynthLabsAI/Big-Math-RL-Verified
+# dataset_name: xiaodongguaAIGC/X-R1-750
 dataset_configs:
 - train
 num_processes: 3
-max_train_samples: 100
-max_val_samples: 50
+max_train_samples: 1000
+max_val_samples: -1
 
 # GRPO trainer config
-wandb_project: "X-R1-dev"
+wandb_project: "X-R1-devdev"
 bf16: true
 use_vllm: true
 vllm_device: auto
-vllm_gpu_memory_utilization: 0.5
+vllm_gpu_memory_utilization: 0.7
 do_eval: false
-eval_strategy: "epoch"
+eval_strategy: "steps"
 eval_steps: 30
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
@@ -34,7 +36,7 @@ log_level: info
 logging_steps: 10
 logging_strategy: "steps"
 log_completions: true
-lr_scheduler_type: cosine
+lr_scheduler_type: constant
 max_prompt_length: 256
 num_generations: 6
 temperature: 0.9
@@ -43,10 +45,10 @@ temperature_schedule:
   start: 0.9
   steps: [[1, 0.9]] 
 advantage_offset: 0.0
-logp_variance_reg_coef: 10.0
+logp_variance_reg_coef: 0.0
 max_completion_length: 1024
 max_steps: -1
-num_train_epochs: 10
+num_train_epochs: 3
 output_dir: output/X-R1-3B
 overwrite_output_dir: true
 per_device_eval_batch_size: 2

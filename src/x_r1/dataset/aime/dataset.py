@@ -2,24 +2,22 @@ from typing import Dict, List, Optional, Union, Any
 from datasets import load_dataset, Dataset, IterableDataset
 import torch
 SYSTEM_PROMPT = (
-        "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-        "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-        "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-        "<think> reasoning process here </think><answer> answer here </answer>"
-    )
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+)
 
-class BigMathDataset:
+class AIMEDataset:
     """
     Dataset loader and processor for XDG Dataset
     """
-   
+    
 
     
     @staticmethod
     def load_dataset(
         dataset_name: str,
-        dataset_config: Optional[str] = None,
-        max_train_samples: Optional[int] = -1,
         max_test_samples: Optional[int] = -1,
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
@@ -27,21 +25,19 @@ class BigMathDataset:
         Load the dataset from HuggingFace or local source
         """
         dataset = load_dataset(dataset_name)
+        for split in dataset:
+            if "solution"==dataset[split].column_names:
+                dataset[split] = dataset[split].remove_columns("solution")
         
-        
-        dataset = dataset.map(BigMathDataset.process_example)
+        dataset = dataset.map(AIMEDataset.process_example)
         
         
         # Apply filtering or selection if needed
-        if max_train_samples and max_train_samples > 0:
-            for split in dataset:
-                if split == "train":
-                    dataset[split] = dataset[split].select(range(min(max_train_samples, len(dataset[split]))))
+        dataset = dataset['train']
         
         if max_test_samples and max_test_samples > 0:       
-            for split in dataset:
-                if split == "test":
-                    dataset[split] = dataset[split].select(range(min(max_test_samples, len(dataset[split]))))    
+            
+            dataset = dataset.select(range(min(max_test_samples, len(dataset))))    
         return dataset
     
     @staticmethod

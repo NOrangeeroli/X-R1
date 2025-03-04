@@ -1,6 +1,9 @@
 from typing import Dict, List, Optional, Union, Any
 from datasets import load_dataset, Dataset, IterableDataset
 import torch
+
+
+
 SYSTEM_PROMPT = (
         "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
         "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
@@ -8,29 +11,30 @@ SYSTEM_PROMPT = (
         "<think> reasoning process here </think><answer> answer here </answer>"
     )
 
-class BigMathDataset:
+
+class XDGDataset:
     """
     Dataset loader and processor for XDG Dataset
     """
-   
-
+    
     
     @staticmethod
     def load_dataset(
         dataset_name: str,
         dataset_config: Optional[str] = None,
-        max_train_samples: Optional[int] = -1,
-        max_test_samples: Optional[int] = -1,
+        max_train_samples: Optional[int] = None,
+        max_test_samples: Optional[int] = 1000,
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
         """
         Load the dataset from HuggingFace or local source
         """
-        dataset = load_dataset(dataset_name)
+        dataset = load_dataset(dataset_name, name = dataset_config)
         
-        
-        dataset = dataset.map(BigMathDataset.process_example)
-        
+        dataset = dataset.map(XDGDataset.process_example)
+        for split in dataset:
+            if "messages" in dataset[split].column_names:
+                dataset[split] = dataset[split].remove_columns("messages")
         
         # Apply filtering or selection if needed
         if max_train_samples and max_train_samples > 0:
@@ -55,7 +59,6 @@ class BigMathDataset:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": example["problem"]},
             ],
-            "solution": example["answer"],
         }
             
    

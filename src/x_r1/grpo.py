@@ -20,9 +20,10 @@ from dataclasses import dataclass, field
 import datasets
 import torch
 import transformers
-from dataset.xdg.dataset import XDGDataset
-from dataset.xdg.reward import XDGReward
-from dataset.registry import get_dataset_class, get_reward_class
+# from dataset.xdg.dataset import XDGDataset
+# from dataset.xdg.reward import XDGReward
+from dataset.reward import Reward
+from dataset.registry import get_dataset_class
 from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -62,6 +63,10 @@ def init_wandb_training(training_args):
 
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
+    eval_dataset_name: str = field(
+        default=None,
+        metadata={"help": "Name of a separate dataset to use for evaluation. If None, will use test split of training dataset."}
+    )
     max_train_samples: int = field(
         default=-1,
         metadata={"help": "The maximum number of samples to load from the dataset."}
@@ -152,11 +157,13 @@ def main(script_args, training_args, model_args):
     dataset = get_dataset_class(script_args.dataset_name)().load_dataset(
         script_args.dataset_name, script_args.dataset_config, script_args.max_train_samples, script_args.max_test_samples
     )
+    
+    
 
    
 
     # Get reward functions
-    reward_class = get_reward_class(script_args.dataset_name)
+    reward_class = Reward
     REWARD_FUNCS_REGISTRY = {
         "accuracy": reward_class.accuracy_reward,
         "format": reward_class.format_reward,
@@ -204,11 +211,15 @@ def main(script_args, training_args, model_args):
     #############################
     # Initialize the XGRPO trainer
     #############################
-    eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
-    if training_args.eval_strategy != "no":
-        eval_dataset = eval_dataset.select(range(min(50, len(eval_dataset))))
+    if script_args.eval_dataset_name is not None:
+            eval_dataset = get_dataset_class(script_args.eval_dataset_name)().load_dataset(
+            script_args.eval_dataset_name, 
+            script_args.max_test_samples
+        )
+    else:
+        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
+    
     train_dataset=dataset[script_args.dataset_train_split]
-    train_dataset = train_dataset.select(range(min(100, len(train_dataset))))
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
         # model = model,
