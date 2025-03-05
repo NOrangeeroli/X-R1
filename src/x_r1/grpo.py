@@ -22,22 +22,15 @@ import torch
 import transformers
 # from dataset.xdg.dataset import XDGDataset
 # from dataset.xdg.reward import XDGReward
-from dataset.reward import Reward
-from dataset.registry import get_dataset_class
+from dataset.reward import Reward, SVGReward
+from dataset.registry import get_dataset_class, get_reward_class
 from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 from configs import GRPOConfig
-from rewards import (
-    accuracy_reward,
-    format_reward,
-    get_cosine_scaled_reward,
-    get_repetition_penalty_reward,
-    len_reward,
-    reasoning_steps_reward,
-)
+
 from utils.callbacks import get_callbacks
 from x_grpo_trainer import XGRPOTrainer
 from grpo_trainer import GRPOTrainer
@@ -155,7 +148,10 @@ def main(script_args, training_args, model_args):
     # Load the dataset
     
     dataset = get_dataset_class(script_args.dataset_name)().load_dataset(
-        script_args.dataset_name, script_args.dataset_config, script_args.max_train_samples, script_args.max_test_samples
+        script_args.dataset_name, 
+        script_args.dataset_config, 
+        script_args.max_train_samples, 
+        script_args.max_test_samples
     )
     
     
@@ -163,7 +159,7 @@ def main(script_args, training_args, model_args):
    
 
     # Get reward functions
-    reward_class = Reward
+    reward_class = get_reward_class(script_args.dataset_name)
     REWARD_FUNCS_REGISTRY = {
         "accuracy": reward_class.accuracy_reward,
         "format": reward_class.format_reward,
