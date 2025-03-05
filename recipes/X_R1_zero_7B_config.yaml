@@ -9,11 +9,14 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Data training arguments
-dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
+#dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
+eval_dataset_name: HuggingFaceH4/aime_2024
+dataset_name: SynthLabsAI/Big-Math-RL-Verified
 dataset_configs:
 - train
 num_processes: 3
-
+max_train_samples: 2000
+max_val_samples: -1
 # GRPO trainer config
 use_vllm: true
 output_dir: output/X-R1-7B
@@ -24,10 +27,10 @@ max_completion_length: 1024
 
 bf16: true
 vllm_device: auto
-vllm_gpu_memory_utilization: 0.7
+vllm_gpu_memory_utilization: 0.5
 do_eval: false
-eval_strategy: "no"
-eval_steps: 10
+eval_strategy: "steps"
+eval_steps: 30
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
@@ -39,7 +42,7 @@ lr_scheduler_type: cosine
 max_steps: -1
 num_train_epochs: 3
 overwrite_output_dir: true
-per_device_eval_batch_size: 1
+per_device_eval_batch_size: 4
 per_device_train_batch_size: 4
 push_to_hub: False
 report_to:
