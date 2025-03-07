@@ -216,11 +216,11 @@ class SVGReward:
         ans = [SVGReward.extract_svg(content) for content in completion_contents]
         rewards = []
         for content, sol, text in zip(ans, solution, completion_contents):
-            print(f"CONTENT: {text}\n")
-            print(f"SVG CODE: {content}\n")    
+            # print(f"CONTENT: {text}\n")
+            # print(f"SVG CODE: {content}\n")    
             image = svg_to_image(content)
             if not image:
-                assert False
+                reward=0.0
                 
             # elif SVGReward.single_format_reward(content) == 0.0:
             #     reward=0.0
@@ -230,7 +230,7 @@ class SVGReward:
                 # if reward <0.3:
                 #     reward=0.0
             rewards.append(reward)
-            print(f"ACC: {reward}\n") 
+            # print(f"ACC: {reward}\n") 
                     
             
 

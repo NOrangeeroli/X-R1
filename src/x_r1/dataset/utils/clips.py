@@ -36,9 +36,9 @@ def svg_to_image(svg_code):
         image = Image.open(BytesIO(png_data))
         return image
     except Exception as e:
-        print(f"Error converting SVG to image: {e}")
-        black_image = Image.new('RGB', (256, 256), color='black')
-        return black_image
+        # print(f"Error converting SVG to image: {e}")
+        # black_image = Image.new('RGB', (256, 256), color='black')
+        return None
 
 
 def clip_text_image_distance(text: str, image: Image) -> float:
