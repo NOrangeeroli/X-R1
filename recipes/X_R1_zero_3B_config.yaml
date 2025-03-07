@@ -3,23 +3,25 @@
 # running time 2~3h
 
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-3B
+model_name_or_path: Qwen/Qwen2.5-3B-Instruct
 model_revision: main
 torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Data training arguments
-eval_dataset_name: HuggingFaceH4/aime_2024
-dataset_name: SynthLabsAI/Big-Math-RL-Verified
+# eval_dataset_name: HuggingFaceH4/aime_2024
+# dataset_name: SynthLabsAI/Big-Math-RL-Verified
 # dataset_name: xiaodongguaAIGC/X-R1-750
+dataset_name: phiyodr/coco2017
 dataset_configs:
 - train
-num_processes: 3
+num_processes: 7
 max_train_samples: 1000
-max_val_samples: -1
+max_test_samples: 10
+dataset_test_split: validation
 
 # GRPO trainer config
-wandb_project: "X-R1-devdev"
+wandb_project: "X-R1-SGP"
 bf16: true
 use_vllm: true
 vllm_device: auto
@@ -38,7 +40,7 @@ logging_strategy: "steps"
 log_completions: true
 lr_scheduler_type: constant
 max_prompt_length: 256
-num_generations: 6
+num_generations: 7
 temperature: 0.9
 temperature_schedule:
   type: "step"

@@ -929,6 +929,8 @@ class GRPOTrainer(Trainer):
 
         
         # Reshape to group by prompt
+        batch_size = hidden_states.size(0)
+        
         if batch_size % self.num_generations != 0:
             print(f"Warning: Batch size {batch_size} not divisible by num_generations {self.num_generations}. Skipping diversity metrics.")
             return
@@ -1300,7 +1302,7 @@ class GRPOTrainer(Trainer):
             # # Only print changes if using a schedule
             # if hasattr(self.args, "temperature_schedule") and self.args.temperature_schedule is not None:
             #     print(f"Step {current_step}: Temperature is {new_temp:.4f}")
-    
+ 
     def evaluation_loop(self, *args, **kwargs):
         result = super().evaluation_loop(*args, **kwargs)
         # Clean up memory after evaluation
@@ -1309,7 +1311,6 @@ class GRPOTrainer(Trainer):
                 self._buffered_inputs[i] = None
         torch.cuda.empty_cache()
         return result           
-               
             
     def training_step(self, model, inputs, num_items_in_batch):
         # Update temperature before each training step
