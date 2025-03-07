@@ -27,7 +27,7 @@ class GRPOConfig(trl.GRPOConfig):
     args for callbacks, benchmarks etc
     """
     logp_variance_reg_coef: float = field(
-        default=0.1,
+        default=0.0,
         metadata={
             "help": "Coefficient for log probability variance regularization. Higher values more strongly penalize "
                     "variance in log probabilities among completions with the same high reward value."
