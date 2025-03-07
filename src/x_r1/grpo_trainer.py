@@ -776,22 +776,27 @@ class GRPOTrainer(Trainer):
 
             if self.beta == 0.0:
                 ref_per_token_logps = None
+                completion_hidden_states = self._get_completion_hidden_states(
+                    self.model, prompt_completion_ids, attention_mask, logits_to_keep
+                )
             elif self.ref_model is not None:
                 ref_per_token_logps = self._get_per_token_logps(
                     self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep
                 )
+                completion_hidden_states = self._get_completion_hidden_states(
+                    self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep
+                )
             else:
-                with self.accelerator.unwrap_model(self.model).disable_adapter():
-                    ref_per_token_logps = self._get_per_token_logps(
-                        self.model, prompt_completion_ids, attention_mask, logits_to_keep
-                    )
-            assert  self.beta != 0.0   
-            completion_hidden_states = self._get_completion_hidden_states(
-                self.ref_model, 
-                prompt_completion_ids,
-                attention_mask,
-                logits_to_keep
-            )    
+                with torch.no_grad():
+                    with self.accelerator.unwrap_model(self.model).disable_adapter():
+                        ref_per_token_logps = self._get_per_token_logps(
+                            self.model, prompt_completion_ids, attention_mask, logits_to_keep
+                        )
+                        completion_hidden_states = self._get_completion_hidden_states(
+                            self.model, prompt_completion_ids, attention_mask, logits_to_keep
+                        )
+                    
+           
             
 
         # Decode the generated completions

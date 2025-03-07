@@ -56,6 +56,10 @@ def init_wandb_training(training_args):
 
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
+    use_unsloth: bool = field(
+        default=False,
+        metadata={"help": "Use unsloth for training."},
+    )
     eval_dataset_name: str = field(
         default=None,
         metadata={"help": "Name of a separate dataset to use for evaluation. If None, will use test split of training dataset."}
@@ -202,6 +206,8 @@ def main(script_args, training_args, model_args):
     # if peft_config not None:
     #     model = get_peft_model(model, peft_config)
     # print(model)
+    
+
 
 
     #############################
@@ -216,16 +222,43 @@ def main(script_args, training_args, model_args):
         eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
     
     train_dataset=dataset[script_args.dataset_train_split]
-    trainer = GRPOTrainer(
-        model=model_args.model_name_or_path,
-        # model = model,
-        reward_funcs=reward_funcs,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        peft_config=get_peft_config(model_args), # LoRA parameter
-        callbacks=get_callbacks(training_args, model_args),
-    )
+    
+    if script_args.use_unsloth:
+        from unsloth import FastLanguageModel, PatchFastRL
+        PatchFastRL("GRPO", FastLanguageModel)
+        from unsloth import is_bfloat16_supported
+        training_args.model_init_kwargs = None
+        if training_args.local_rank == 0:
+            fast_inference = True
+        else:
+            fast_inference = False
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = model_args.model_name_or_path,
+            max_seq_length = training_args.max_completion_length,
+            load_in_4bit = True, # False for LoRA 16bit
+            fast_inference = fast_inference, # Enable vLLM fast inference
+            gpu_memory_utilization = training_args.vllm_gpu_memory_utilization
+            , # Reduce if out of memory
+        )
+        trainer = GRPOTrainer(
+            model = model,
+            processing_class = tokenizer,
+            reward_funcs=reward_funcs,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+        )
+    else:
+        trainer = GRPOTrainer(
+            model=model_args.model_name_or_path,
+            # model = model,
+            reward_funcs=reward_funcs,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            peft_config=get_peft_config(model_args), # LoRA parameter
+            callbacks=get_callbacks(training_args, model_args),
+        )
 
     print(trainer)
 
