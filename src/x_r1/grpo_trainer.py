@@ -1041,7 +1041,7 @@ class GRPOTrainer(Trainer):
             per_token_loss = per_token_loss + self.beta * per_token_kl
         loss = (per_token_loss * completion_mask).sum() / completion_mask.sum()
         
-        loss += self.logp_variance_reg_coef * reg_term
+        #loss += self.logp_variance_reg_coef * reg_term
         
 
         # Log the metrics
