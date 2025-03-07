@@ -52,6 +52,8 @@ class Reward:
             # If API call fails, fall back to simple text matching
             return 1.0 if Reward.normalize_text(answer) == Reward.normalize_text(solution) else 0.0
     
+
+
     
     @staticmethod
     def accuracy_reward(completions, solution, **kwargs):
@@ -194,9 +196,10 @@ class SVGReward:
                     think_close_count == 1 and 
                     answer_open_count == 1 and 
                     answer_close_count == 1)
-            
+        no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
-        reward = 1.0 if (structure_match and tags_valid) else 0.0
+        
+        reward = 1.0 if (structure_match and tags_valid and no_text) else 0.0
         
         
         return reward
@@ -217,7 +220,8 @@ class SVGReward:
         rewards = []
         for content, sol, text in zip(ans, solution, completion_contents):
             # print(f"CONTENT: {text}\n")
-            # print(f"SVG CODE: {content}\n")    
+            # print(f"SVG CODE: {content}\n")
+                
             image = svg_to_image(content)
             if not image:
                 reward=0.0
@@ -234,6 +238,19 @@ class SVGReward:
                     
             
 
+        return rewards
+    
+    @staticmethod
+    def no_text_reward(completions, **kwargs):
+        completion_contents = [completion[0]["content"] for completion in completions]
+        ans = [SVGReward.extract_svg(content) for content in completion_contents]
+        rewards = []
+        for content in ans:
+            if "</text>" in content:
+                reward=0.0
+            else:
+                reward=1.0
+            rewards.append(reward)
         return rewards
 
 if __name__ ==  "__main__":

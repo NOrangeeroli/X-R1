@@ -57,7 +57,7 @@ class COCODataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following caption: {example['captions'][0]}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['captions'][0]}"},
             ],
             "solution": example["captions"][0],
         }
