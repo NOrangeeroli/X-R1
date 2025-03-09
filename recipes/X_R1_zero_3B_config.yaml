@@ -21,6 +21,7 @@ max_test_samples: 10
 dataset_test_split: validation
 
 # GRPO trainer config
+epsilon: 0.02
 wandb_project: "X-R1-SGP"
 bf16: true
 use_vllm: true
@@ -38,7 +39,7 @@ log_level: info
 logging_steps: 10
 logging_strategy: "steps"
 log_completions: true
-lr_scheduler_type: constant
+lr_scheduler_type: cosine
 max_prompt_length: 256
 num_generations: 7
 temperature: 0.9
