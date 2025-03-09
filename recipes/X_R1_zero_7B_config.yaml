@@ -24,7 +24,7 @@ epsilon: 0.02
 wandb_project: "X-R1-SGP"
 use_vllm: true
 output_dir: output/X-R1-7B
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 8
 max_prompt_length: 256
 num_generations: 7
 temperature: 0.9
