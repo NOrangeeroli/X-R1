@@ -10,20 +10,22 @@ attn_implementation: flash_attention_2
 
 # Data training arguments
 #dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
-eval_dataset_name: HuggingFaceH4/aime_2024
-dataset_name: SynthLabsAI/Big-Math-RL-Verified
+# eval_dataset_name: HuggingFaceH4/aime_2024
+dataset_name: phiyodr/coco2017
 dataset_configs:
 - train
-num_processes: 3
-max_train_samples: 8000
-max_val_samples: -1
+num_processes: 7
+max_train_samples: 3000
+max_val_samples: 10
+dataset_test_split: validation
+
 # GRPO trainer config
-wandb_project: "X-R1-math"
+wandb_project: "X-R1-SGP"
 use_vllm: true
 output_dir: output/X-R1-7B
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 8
 max_prompt_length: 256
-num_generations: 12
+num_generations: 7
 temperature: 0.9
 temperature_schedule:
   type: "step"
@@ -48,7 +50,7 @@ logging_steps: 10
 logging_strategy: steps
 lr_scheduler_type: constant
 max_steps: -1
-num_train_epochs: 2
+num_train_epochs: 1
 overwrite_output_dir: true
 per_device_eval_batch_size: 4
 per_device_train_batch_size: 4
