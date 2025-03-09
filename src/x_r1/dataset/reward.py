@@ -199,7 +199,7 @@ class SVGReward:
         no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
         
-        reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
+        reward = 1.0 if (structure_match and tags_valid and no_text) else 0.0
         
         
         return reward
@@ -224,20 +224,7 @@ class SVGReward:
         rewards = [1.0 - distance for distance in distances]
         return rewards
         
-    '''
-    @staticmethod
-    def no_text_reward(completions, **kwargs):
-        completion_contents = [completion[0]["content"] for completion in completions]
-        ans = [SVGReward.extract_svg(content) for content in completion_contents]
-        rewards = []
-        for content in ans:
-            if "</text>" in content:
-                reward=0.0
-            else:
-                reward=1.0
-            rewards.append(reward)
-        return rewards
-    '''
+
 
 if __name__ ==  "__main__":
     text = """<svg width="200" height="300" xmlns="http://www.w3.org/2000/svg">
