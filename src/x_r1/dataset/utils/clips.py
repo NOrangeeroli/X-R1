@@ -136,67 +136,66 @@ def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[
     if len(texts) != len(images):
         raise ValueError(f"Number of texts ({len(texts)}) must match number of images ({len(images)})")
     
-    # Determine device
-    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    # # Determine device
+    # local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     
-    # Determine device if not provided
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"clip_text_image_distance_batch: device: {device}")
+    # # Determine device if not provided
+    # if device is None:
+    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print(f"clip_text_image_distance_batch: device: {device}")
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+    device = "cpu"
     # Get model and preprocess function
     model, preprocess = get_clip_model(device=device)
     
     distances = []
     
-    try:
-        # Process in batches
-        # for i in range(0, len(texts), batch_size):
-        batch_texts = texts
-        batch_images = images
-        
-        # Keep track of None images
-        valid_indices = []
-        valid_images = []
-        for i, img in enumerate(batch_images):
-            if img is not None:
-                valid_indices.append(i)
-                valid_images.append(img)
-        
-        # Initialize distances with zeros (default value for None images)
-        distances = [0.0] * len(batch_texts)
-        
-        # Only process if we have valid images
-        if valid_images:
-            with torch.no_grad():
-                # Process text batch - only for valid indices
-                valid_texts = [batch_texts[i] for i in valid_indices]
-                text_tokens = clip.tokenize(valid_texts).to(device)
-                text_embeddings = model.encode_text(text_tokens)
+    # Process in batches
+    # for i in range(0, len(texts), batch_size):
+    batch_texts = texts
+    batch_images = images
+    
+    # Keep track of None images
+    valid_indices = []
+    valid_images = []
+    for i, img in enumerate(batch_images):
+        if img is not None:
+            valid_indices.append(i)
+            valid_images.append(img)
+    
+    # Initialize distances with zeros (default value for None images)
+    distances = [1.0] * len(batch_texts)
+    
+    # Only process if we have valid images
+    if valid_images:
+        with torch.no_grad():
+            # Process text batch - only for valid indices
+            valid_texts = [batch_texts[i] for i in valid_indices]
+            text_tokens = clip.tokenize(valid_texts).to(device)
+            text_embeddings = model.encode_text(text_tokens)
+            
+            # Process image batch - only valid images
+            image_inputs = torch.stack([preprocess(img) for img in valid_images]).to(device)
+            image_embeddings = model.encode_image(image_inputs)
+            
+            # Normalize embeddings
+            text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+            image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
+            
+            # Compute similarities (dot product)
+            similarities = torch.sum(text_embeddings * image_embeddings, dim=-1).cpu().numpy()
+            # Convert similarities to distances
+            valid_distances = 1.0 - similarities
+            
+            # Update distances for valid indices
+            for idx, valid_idx in enumerate(valid_indices):
+                distances[valid_idx] = valid_distances[idx]
                 
-                # Process image batch - only valid images
-                image_inputs = torch.stack([preprocess(img) for img in valid_images]).to(device)
-                image_embeddings = model.encode_image(image_inputs)
-                
-                # Normalize embeddings
-                text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
-                image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
-                
-                # Compute similarities (dot product)
-                similarities = torch.sum(text_embeddings * image_embeddings, dim=-1).cpu().numpy()
-                # Convert similarities to distances
-                valid_distances = 1.0 - similarities
-                
-                # Update distances for valid indices
-                for idx, valid_idx in enumerate(valid_indices):
-                    distances[valid_idx] = valid_distances[idx]
-                
-    except Exception as e:
-        print(f"CLIP batch processing error: {e}")
-        # Fill remaining results with zeros if an error occurs
-        remaining = len(texts) - len(distances)
-        distances.extend([0.0] * remaining)
+    # except Exception as e:
+    #     print(f"CLIP batch processing error: {e}")
+    #     # Fill remaining results with zeros if an error occurs
+    #     remaining = len(texts) - len(distances)
+    #     distances.extend([0.0] * remaining)
     
     # Return single value if both inputs were single items
     if single_text and single_image and len(distances) == 1:
