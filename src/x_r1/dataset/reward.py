@@ -163,10 +163,10 @@ class SVGReward:
         return ""
     
     def extract_svg(text):
-        """Extract content between <answer> tags."""
         if text is None:
             return ""
-        ans = SVGReward.extract_answer(text)
+        # ans = SVGReward.extract_answer(text)
+        ans = text
         match = re.search(r'(<svg.*?</svg>)', ans, re.DOTALL)
         if match:
             return match.group(1).strip()
@@ -199,7 +199,8 @@ class SVGReward:
         no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
         
-        reward = 1.0 if (structure_match and tags_valid and no_text) else 0.0
+        # reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
+        reward = 0.5 if no_text else 0.0
         
         
         return reward
