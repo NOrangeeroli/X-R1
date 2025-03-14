@@ -199,8 +199,8 @@ class SVGReward:
         no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
         
-        # reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
-        reward = 0.5 if no_text else 0.0
+        reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
+        # reward = 0.5 if no_text else 0.0
         
         
         return reward
