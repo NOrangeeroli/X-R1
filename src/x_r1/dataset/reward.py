@@ -140,7 +140,7 @@ class Reward:
         return rewards
     
     
-from .utils.clips import svg_to_image, clip_text_image_distances_batch
+from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch
 class SVGReward:
     @staticmethod
     def extract_answer(text):
@@ -167,7 +167,7 @@ class SVGReward:
             return ""
         # ans = SVGReward.extract_answer(text)
         ans = text
-        match = re.search(r'(<svg.*?</svg>)', ans, re.DOTALL)
+        match = re.search(r'(<svg .*?</svg>)', ans, re.DOTALL)
         if match:
             return match.group(1).strip()
         else:
@@ -222,6 +222,92 @@ class SVGReward:
         images = [svg_to_image(content) for content in ans]
         
         distances = clip_text_image_distances_batch(solution, images)
+        rewards = [1.0 - distance for distance in distances]
+        return rewards
+        
+class SVGImageReward:
+    @staticmethod
+    def extract_answer(text):
+        """Extract content between <answer> tags."""
+        if text is None:
+            return ""
+        match = re.search(r'<answer>(.*?)</answer>', text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        else:
+            return SVGImageReward.extract_answer_half(text)
+    @staticmethod
+    def extract_answer_half(text):
+        """Extract content between <answer> tags."""
+        if text is None:
+            return ""
+        match = re.search(r'<answer>(.*?)', text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return ""
+    
+    def extract_svg(text):
+        if text is None:
+            return ""
+        # ans = SVGReward.extract_answer(text)
+        ans = text
+        match = re.search(r'(<svg .*?</svg>)', ans, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        else:
+            match = re.search(r'(<svg.*?)', ans, re.DOTALL)
+            if match:
+                return match.group(1).strip() 
+            
+            return ""
+    @staticmethod
+    def single_format_reward(content, **kwargs):
+        """Reward function that checks if the completion has a specific format with exactly one of each tag."""
+        # content = completion[0]["content"]
+        
+        
+        # Check if the overall structure is correct
+        structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
+        
+        # Count occurrences of each tag
+        think_open_count = content.count("<think>")
+        think_close_count = content.count("</think>")
+        answer_open_count = content.count("<answer>")
+        answer_close_count = content.count("</answer>")
+        
+        # Check if exactly one of each tag exists
+        tags_valid = (think_open_count == 1 and 
+                    think_close_count == 1 and 
+                    answer_open_count == 1 and 
+                    answer_close_count == 1)
+        no_text = "</text>" not in content    
+        # Reward is 1.0 only if both structure and tag counts are correct
+        
+        reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
+        # reward = 0.5 if no_text else 0.0
+        
+        
+        return reward
+ 
+    @staticmethod
+    def format_reward(completions, **kwargs):
+        """Reward function that checks if the completion has a specific format with exactly one of each tag."""
+        return [SVGImageReward.single_format_reward(completion[0]["content"]) for completion in completions]
+        
+
+    @staticmethod
+    def accuracy_reward(completions, solution, **kwargs):
+        
+        
+        
+        completion_contents = [completion[0]["content"] for completion in completions]
+        ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
+        ans_ref = [SVGImageReward.extract_svg(content) for content in solution]
+        rewards = []
+        images = [svg_to_image(content) for content in ans]
+        ref_images = [svg_to_image(content) for content in ans_ref]
+        
+        distances = clip_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
         return rewards
         

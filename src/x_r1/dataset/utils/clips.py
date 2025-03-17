@@ -110,6 +110,47 @@ def clip_text_image_distance(text: str, image: Image) -> float:
         return 0.0
 
 
+def clip_image_image_distance(image1: Image.Image, image2: Image.Image, device=None) -> float:
+    """
+    Computes the cosine distance between two images using CLIP embeddings.
+    
+    Args:
+        image1 (Image): First PIL Image.
+        image2 (Image): Second PIL Image.
+        device (str, optional): Device to run CLIP on. Defaults to "cpu".
+    
+    Returns:
+        float: Cosine distance between the two image embeddings.
+    """
+    # Determine device if not provided
+    if device is None:
+        device = "cpu"
+    
+    model, preprocess = get_clip_model(device=device)
+    try:
+        with torch.no_grad():
+            # Convert first image to CLIP embedding
+            image1_input = preprocess(image1).unsqueeze(0).to(device)
+            image1_embedding = model.encode_image(image1_input).detach().cpu()
+            
+            # Convert second image to CLIP embedding
+            image2_input = preprocess(image2).unsqueeze(0).to(device)
+            image2_embedding = model.encode_image(image2_input).detach().cpu()
+
+            # Normalize embeddings
+            image1_embedding = image1_embedding / image1_embedding.norm(dim=-1, keepdim=True)
+            image2_embedding = image2_embedding / image2_embedding.norm(dim=-1, keepdim=True)
+
+            # Compute cosine similarity
+            cosine_similarity = torch.nn.functional.cosine_similarity(image1_embedding, image2_embedding).item()
+    
+            # Convert similarity to distance (1 - similarity)
+            cosine_distance = 1 - cosine_similarity
+            return cosine_distance
+    except Exception as e:
+        print(f"CLIP processing error: {e}")
+        return 1.0  # Return maximum distance on error
+
 def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[Image.Image, List[Image.Image]], device=None) -> Union[float, List[float]]:
     """
     Computes the cosine distance between texts and images using CLIP embeddings in batch mode.
@@ -161,7 +202,7 @@ def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[
     for i, img in enumerate(batch_images):
         if img is not None:
             valid_indices.append(i)
-            valid_images.append(img)
+            valid_images.append(prepare_image(img))
     
     # Initialize distances with zeros (default value for None images)
     distances = [1.0] * len(batch_texts)
@@ -207,17 +248,15 @@ def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[
 def clip_image_image_distances_batch(
     reference_images: Union[Image.Image, List[Image.Image]], 
     query_images: Union[Image.Image, List[Image.Image]], 
-    device=None, 
-    batch_size=32
+    device=None
 ) -> Union[float, List[float]]:
     """
-    Computes the cosine distance between reference images and query images using CLIP embeddings in batch mode.
+    Computes the cosine distance between reference images and query images using CLIP embeddings.
     
     Args:
         reference_images: Either a single PIL Image or a list of PIL Images.
         query_images: Either a single PIL Image or a list of PIL Images.
         device: Device to run the model on.
-        batch_size: Maximum number of samples to process in one batch.
     
     Returns:
         If both inputs are single items: a float representing the distance
@@ -248,6 +287,101 @@ def clip_image_image_distances_batch(
     for i, img in enumerate(reference_images):
         if img is not None:
             valid_ref_indices.append(i)
+            valid_ref_images.append(prepare_image(img))
+    
+    valid_query_indices = []
+    valid_query_images = []
+    for i, img in enumerate(query_images):
+        if img is not None:
+            valid_query_indices.append(i)
+            valid_query_images.append(prepare_image(img))
+    
+    # Initialize distances with default value (1.0 means maximum distance)
+    distances = [1.0] * len(reference_images)
+    
+    # Only process if we have valid images in both sets
+    if valid_ref_images and valid_query_images:
+        with torch.no_grad():
+            try:
+                # Process all reference images at once
+                ref_inputs = torch.stack([preprocess(img) for img in valid_ref_images]).to(device)
+                ref_embeddings = model.encode_image(ref_inputs)
+                
+                # Normalize embeddings
+                ref_embeddings = ref_embeddings / ref_embeddings.norm(dim=-1, keepdim=True)
+                
+                # Process all query images at once
+                query_inputs = torch.stack([preprocess(img) for img in valid_query_images]).to(device)
+                query_embeddings = model.encode_image(query_inputs)
+                
+                # Normalize embeddings
+                query_embeddings = query_embeddings / query_embeddings.norm(dim=-1, keepdim=True)
+                
+                # Compute similarities (dot product)
+                similarities = torch.mm(query_embeddings, ref_embeddings.t())
+                
+                # Get similarity for corresponding pairs
+                for i, query_idx in enumerate(valid_query_indices):
+                    ref_position = valid_ref_indices.index(query_idx) if query_idx in valid_ref_indices else -1
+                    if ref_position >= 0:
+                        similarity = similarities[i, ref_position].item()
+                        distances[query_idx] = 1.0 - similarity
+            except RuntimeError as e:
+                print(f"Error processing images in one batch: {e}")
+                print("Consider using the batched version for large datasets")
+                # Fall back to default distances (1.0)
+    
+    # Return single value if both inputs were single items
+    if single_reference and single_query and len(distances) == 1:
+        return distances[0]
+    
+    return distances
+def prepare_image(img):
+    """Handle RGBA images consistently by converting to RGB with white background"""
+    if img.mode == 'RGBA':
+        white_bg = Image.new('RGBA', img.size, (255, 255, 255, 255))
+        white_bg.paste(img, mask=img.split()[3])
+        return white_bg.convert('RGB')
+    elif img.mode != 'RGB':
+        return img.convert('RGB')
+    return img
+
+def clip_image_image_pixel_distances_batch(
+    reference_images: Union[Image.Image, List[Image.Image]], 
+    query_images: Union[Image.Image, List[Image.Image]]
+) -> Union[float, List[float]]:
+    """
+    Computes the pixel-wise distance between reference images and query images.
+    
+    Args:
+        reference_images: Either a single PIL Image or a list of PIL Images.
+        query_images: Either a single PIL Image or a list of PIL Images.
+    
+    Returns:
+        If both inputs are single items: a float representing the distance
+        If either input is a list: a list of distances between 0 (identical) and 1 (maximum difference)
+    """
+    # Handle single inputs
+    single_reference = isinstance(reference_images, Image.Image)
+    single_query = isinstance(query_images, Image.Image)
+    
+    if single_reference:
+        reference_images = [reference_images]
+    if single_query:
+        query_images = [query_images]
+    
+    # Define transform for consistent sizing and normalization
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),  # This scales pixel values to 0-1
+    ])
+    
+    # Filter out None images and track valid indices
+    valid_ref_indices = []
+    valid_ref_images = []
+    for i, img in enumerate(reference_images):
+        if img is not None:
+            valid_ref_indices.append(i)
             valid_ref_images.append(img)
     
     valid_query_indices = []
@@ -262,110 +396,120 @@ def clip_image_image_distances_batch(
     
     # Only process if we have valid images in both sets
     if valid_ref_images and valid_query_images:
-        # Process images in batches to avoid memory issues
-        ref_embeddings_list = []
-        
-        # Process reference images in batches
-        for i in range(0, len(valid_ref_images), batch_size):
-            batch_ref_images = valid_ref_images[i:i+batch_size]
-            
-            with torch.no_grad():
-                # Process reference image batch
-                ref_inputs = torch.stack([preprocess(img) for img in batch_ref_images]).to(device)
-                batch_ref_embeddings = model.encode_image(ref_inputs)
-                
-                # Normalize embeddings
-                batch_ref_embeddings = batch_ref_embeddings / batch_ref_embeddings.norm(dim=-1, keepdim=True)
-                ref_embeddings_list.append(batch_ref_embeddings)
-        
-        # Concatenate all reference embeddings
-        if len(ref_embeddings_list) > 1:
-            ref_embeddings = torch.cat(ref_embeddings_list, dim=0)
-        else:
-            ref_embeddings = ref_embeddings_list[0]
-            
-        # Process query images in batches
-        for i in range(0, len(valid_query_images), batch_size):
-            batch_query_images = valid_query_images[i:i+batch_size]
-            batch_query_indices = valid_query_indices[i:i+batch_size]
-            
-            with torch.no_grad():
-                # Process query image batch
-                query_inputs = torch.stack([preprocess(img) for img in batch_query_images]).to(device)
-                query_embeddings = model.encode_image(query_inputs)
-                
-                # Normalize embeddings
-                query_embeddings = query_embeddings / query_embeddings.norm(dim=-1, keepdim=True)
-                
-                # Compute similarities (dot product)
-                similarities = torch.mm(query_embeddings, ref_embeddings.t())
-                
-                # Get similarity for corresponding pairs
-                for idx, query_idx in enumerate(batch_query_indices):
-                    if query_idx < len(ref_embeddings):
-                        similarity = similarities[idx, query_idx].item()
-                        distances[query_idx] = 1.0 - similarity
+        with torch.no_grad():
+            # Process each valid reference and query image pair
+            for ref_idx, ref_img in zip(valid_ref_indices, valid_ref_images):
+                if ref_idx < len(query_images) and ref_idx in valid_query_indices:
+                    query_img = prepare_image(query_images[ref_idx])
+                    
+                    
+                    
+                    # Convert images to tensors
+                    ref_tensor = transform(prepare_image(ref_img))
+                    query_tensor = transform(query_img)
+                    
+                    # Calculate absolute pixel-wise difference
+                    diff = torch.abs(ref_tensor - query_tensor)
+                    
+                    # Average across all pixels to get a single distance value (0-1 range)
+                    distance = diff.mean().item()
+                    
+                    # Store the distance
+                    distances[ref_idx] = distance
     
     # Return single value if both inputs were single items
     if single_reference and single_query and len(distances) == 1:
         return distances[0]
     
     return distances
-
 if __name__ == "__main__":
-    svg_code = """
-    <svg width="128" height="128" style="enable-background:new 0 0 128 128;" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<linearGradient id="SVGID_1_" gradientTransform="matrix(1 0 0 -1 0 130)" gradientUnits="userSpaceOnUse" x1="27.61" x2="105.4818" y1="97.1075" y2="97.1075">
-<stop offset="0" style="stop-color:#F44336"/>
-<stop offset="0.3592" style="stop-color:#E73B32"/>
-<stop offset="1" style="stop-color:#C62828"/>
-</linearGradient>
-<path d="M90.92,11.55C85.56,7.07,77.56,4.3,63.59,4.3c-25.64,0-35.98,16.53-35.98,36.87 c0,0.08,2.42,0.25,2.91,0.29c0.06,0,0.11,0.01,0.17,0.01L64,32c0,0,30.06,9.38,30.31,10.22l5.69,17.51 c0.31,1.04,1.26,1.75,2.35,1.75c1.29,0,2.36-1,2.45-2.29c0.18-2.87,0.48-8.01,0.62-12.9C105.62,38.86,106.28,24.38,90.92,11.55z" style="fill:url(#SVGID_1_);"/>
-<ellipse cx="101.91" cy="63.86" rx="6.75" ry="6.75" style="fill:#E0E0E0;"/>
-<g id="robe">
-<linearGradient id="SVGID_2_" gradientTransform="matrix(1 0 0 -1 0 130)" gradientUnits="userSpaceOnUse" x1="64" x2="64" y1="33.1589" y2="4.6815">
-<stop offset="0" style="stop-color:#F44336"/>
-<stop offset="0.3592" style="stop-color:#E73B32"/>
-<stop offset="1" style="stop-color:#C62828"/>
-</linearGradient>
-<path d="M64.14,95.97H64c-25.65,0.03-52,7.1-52,24.99V124h1.45h1.44h98.22h1.46H116v-3.04 C116,104.1,89.9,95.97,64.14,95.97z" style="fill:url(#SVGID_2_);"/>
-<polygon points="55.33,105.67 55.33,124 56.83,124 58.33,124 69.67,124 71.16,124 72.66,124 72.66,105.67 " style="fill:#FFFFFF;"/>
+    svg_code = """<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="red"/>
+      <stop offset="100%" stop-color="white"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="100" height="100" fill="url(#gradient)" />
+  <polygon points="10,10 90,10 90,90 10,90" fill="white" />
+  <polygon points="50,20 50,80" fill="none" stroke="red" stroke-width="3" />
+  <polygon points="20,50 80,50" fill="none" stroke="red" stroke-width="3" />
+</svg>"""
+    svg_code_ref = """
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
+<g>
+	<polygon style="fill:#F4B2B0;" points="97.409,61.893 255.999,61.893 149.583,193.179 	"/>
+	<polygon style="fill:#F4B2B0;" points="414.589,61.893 255.999,61.893 362.415,193.179 	"/>
+	<polygon style="fill:#F4B2B0;" points="146.993,194.664 255.999,446.434 365.006,194.664 	"/>
 </g>
-<path id="ears_1_" d="M90.76,47.55H37.19c-5.78,0-10.5,5.17-10.5,11.5s4.73,11.5,10.5,11.5h53.57 c5.78,0,10.5-5.18,10.5-11.5S96.54,47.55,90.76,47.55z" style="fill:#E59600;"/>
-<path id="head" d="M35.75,34.96c-2.32,6.06-3.55,12.89-3.55,20.05c0,11.73,3.39,21.52,9.81,28.3 c5.65,5.97,13.31,9.26,21.58,9.26c8.26,0,15.93-3.29,21.58-9.26c6.42-6.78,9.81-16.57,9.81-28.3c0-7.17-1.24-13.99-3.55-20.05H35.75 z" style="fill:#FFCA28;"/>
-<g id="eyes">
-<ellipse cx="47.68" cy="59.26" rx="4.83" ry="5.01" style="fill:#404040;"/>
-<ellipse cx="80.32" cy="59.26" rx="4.83" ry="5.01" style="fill:#404040;"/>
-</g>
-<g id="eyebrows_x5F_white">
-<path d="M87.41,50.44L87.41,50.44c0-0.01-2.25-3.67-7.48-3.67c-5.23,0-7.49,3.66-7.49,3.66l0,0.01 c-0.18,0.26-0.3,0.58-0.3,0.93c0,0.88,0.69,1.6,1.55,1.6c0.18,0,0.61-0.13,0.65-0.15c3.13-1.33,5.59-1.34,5.59-1.34 s2.43,0.01,5.57,1.34c0.04,0.02,0.47,0.15,0.65,0.15c0.86,0,1.55-0.72,1.55-1.6C87.71,51.03,87.6,50.71,87.41,50.44z" style="fill:#F5F5F5;"/>
-<path d="M55.53,50.44L55.53,50.44c0.01-0.01-2.25-3.67-7.48-3.67s-7.49,3.66-7.49,3.66l0.01,0.01 c-0.18,0.26-0.3,0.58-0.3,0.93c0,0.88,0.69,1.6,1.55,1.6c0.18,0,0.61-0.13,0.65-0.15c3.13-1.33,5.59-1.34,5.59-1.34 s2.44,0.01,5.57,1.34c0.04,0.02,0.47,0.15,0.65,0.15c0.86,0,1.55-0.72,1.55-1.6C55.83,51.03,55.72,50.71,55.53,50.44z" style="fill:#F5F5F5;"/>
+<path style="fill:#B3404A;" d="M511.985,194.034c0.017-2.515-0.654-5.029-2.054-7.225L425.782,54.76
+	c-0.038-0.061-0.085-0.114-0.123-0.174c-0.032-0.048-0.054-0.1-0.086-0.146c-0.066-0.098-0.147-0.183-0.216-0.279
+	c-0.202-0.281-0.411-0.555-0.63-0.816c-0.107-0.127-0.216-0.252-0.329-0.376c-0.249-0.275-0.508-0.535-0.776-0.784
+	c-0.096-0.089-0.187-0.181-0.284-0.265c-0.76-0.668-1.585-1.24-2.458-1.708c-0.1-0.053-0.202-0.098-0.303-0.149
+	c-0.337-0.17-0.681-0.328-1.03-0.468c-0.147-0.06-0.296-0.114-0.445-0.169c-0.328-0.118-0.66-0.222-0.995-0.315
+	c-0.146-0.04-0.292-0.084-0.439-0.119c-0.472-0.113-0.948-0.206-1.429-0.267c-0.005,0-0.009-0.001-0.015-0.003
+	c-0.502-0.062-1.007-0.089-1.514-0.093c-0.04,0-0.078-0.007-0.118-0.007H255.999H97.409c-4.398,0-8.511,2.179-10.981,5.818
+	c-2.47,3.64-2.977,8.267-1.352,12.355l45.255,113.875H37.457l29.313-46.001c3.939-6.182,2.122-14.385-4.06-18.324
+	c-6.182-3.939-14.384-2.123-18.324,4.06L2.069,186.81c-1.403,2.2-2.074,4.717-2.054,7.236c-0.162,3.486,1.033,7.031,3.626,9.761
+	l242.738,255.441c0.072,0.076,0.151,0.139,0.224,0.212c0.077,0.077,0.145,0.161,0.223,0.236c0.098,0.093,0.203,0.173,0.303,0.263
+	c0.161,0.145,0.321,0.287,0.487,0.422c0.183,0.15,0.37,0.291,0.559,0.429c0.17,0.125,0.34,0.248,0.515,0.364
+	c0.199,0.131,0.402,0.252,0.605,0.372c0.173,0.101,0.344,0.204,0.52,0.297c0.218,0.115,0.441,0.218,0.664,0.32
+	c0.17,0.078,0.338,0.159,0.511,0.23c0.24,0.098,0.484,0.18,0.729,0.264c0.162,0.056,0.322,0.117,0.487,0.165
+	c0.265,0.08,0.535,0.141,0.804,0.203c0.147,0.035,0.293,0.076,0.443,0.105c0.301,0.058,0.604,0.098,0.908,0.135
+	c0.121,0.015,0.242,0.038,0.362,0.05c0.425,0.041,0.851,0.064,1.277,0.064h0.001h0.001c0.425,0,0.849-0.023,1.273-0.062
+	c0.119-0.012,0.239-0.036,0.358-0.05c0.303-0.037,0.605-0.076,0.905-0.134c0.15-0.029,0.297-0.07,0.446-0.105
+	c0.267-0.061,0.534-0.122,0.796-0.2c0.165-0.049,0.326-0.11,0.488-0.165c0.242-0.082,0.483-0.163,0.721-0.26
+	c0.174-0.07,0.344-0.153,0.515-0.23c0.22-0.101,0.439-0.2,0.656-0.315c0.178-0.093,0.35-0.196,0.524-0.297
+	c0.202-0.118,0.402-0.236,0.6-0.366c0.175-0.115,0.345-0.239,0.515-0.362c0.188-0.137,0.374-0.276,0.557-0.425
+	c0.165-0.134,0.324-0.273,0.483-0.415c0.1-0.089,0.206-0.169,0.304-0.261c0.08-0.076,0.149-0.159,0.226-0.238
+	c0.073-0.073,0.151-0.135,0.223-0.21l122.146-127.72c5.066-5.297,4.879-13.698-0.418-18.765c-5.298-5.067-13.699-4.877-18.765,0.418
+	l-73.842,77.211l79.323-183.21h94.601l-36.481,38.638c-5.033,5.33-4.791,13.73,0.539,18.761c2.564,2.422,5.84,3.622,9.108,3.622
+	c3.525,0,7.042-1.395,9.653-4.161l56.933-60.299C510.965,201.045,512.15,197.509,511.985,194.034z M255.999,83.044l78.675,97.626
+	h-157.35L255.999,83.044z M137.964,207.214l79.065,182.616L43.495,207.214H137.964z M417.34,90.907l57.203,89.764h-92.875
+	L417.34,90.907z M395.033,75.165l-36.581,92.048l-74.611-92.048H395.033z M228.158,75.165l-74.611,92.048l-36.581-92.048H228.158z
+	 M255.999,413.03l-88.797-205.094h177.595L255.999,413.03z"/>
+<g>
 </g>
 <g>
-<linearGradient id="SVGID_3_" gradientUnits="userSpaceOnUse" x1="63.999" x2="63.999" y1="100.5647" y2="20.8823">
-<stop offset="0.4878" style="stop-color:#F5F5F5"/>
-<stop offset="0.8314" style="stop-color:#BDBDBD"/>
-</linearGradient>
-<path d="M102.36,73.51c-1.74-5.25-3.83-16.73-3.66-21.6c0.22-6.4,0.24-10.71,0.2-13.78 c-0.05-3.7-3.07-6.67-6.78-6.67c0,0-0.67,0-0.69,0v6.51c0.7,3.34,0.63,9.44,0.63,17.24c0,12.46-3.52,18.85-11.82,18.85 c-8.67,0-10.15-2.55-16.59-2.55c-6.45,0-7.98,2.55-16.37,2.55c-7.57,0-11.5-8.77-11.5-19.17c0-4.57-0.2-9.04-0.19-12.58h0V31.47 c-3.66,0.1-6.6,3.08-6.6,6.77c0.01,3.06,0.08,7.35,0.35,13.67c0.21,4.99-1.97,16.71-3.71,21.98c-2.64,7.96-2.22,17.72,1.49,25.24 c3.32,6.73,19.39,17.45,28.87,22.72c3.62,2.01,12.05,2.03,15.69,0.06c9.33-5.06,24.9-15.22,28.48-21.63 C104.54,92.45,105.18,82.04,102.36,73.51z" style="fill:url(#SVGID_3_);"/>
-<radialGradient id="SVGID_4_" cx="64.2726" cy="75.4103" gradientUnits="userSpaceOnUse" r="48.5567">
-<stop offset="0.7063" style="stop-color:#FFFFFF;stop-opacity:0"/>
-<stop offset="1" style="stop-color:#BDBDBD"/>
-</radialGradient>
-<path d="M102.36,73.51c-1.74-5.25-3.83-16.72-3.67-21.6c0.23-6.4,0.24-10.71,0.2-13.77 c-0.05-3.71-3.07-6.67-6.77-6.67h-0.06v23.75c0,12.46-3.52,18.84-11.81,18.84c-8.68,0-10.16-2.54-16.6-2.54 c-6.45,0-7.98,2.54-16.37,2.54c-7.57,0-11.51-8.76-11.51-19.17c0-5.32-0.27-10.51-0.16-14.25h-0.03v-9.16 c-3.66,0.09-6.6,3.08-6.59,6.77c0,3.06,0.07,7.36,0.34,13.67c0.22,4.99-1.96,16.72-3.71,21.98c-2.64,7.97-2.22,17.72,1.49,25.24 c3.33,6.74,19.39,17.45,28.87,22.72c3.62,2.02,12.05,2.04,15.69,0.06c9.33-5.06,24.9-15.22,28.49-21.63 C104.54,92.45,105.18,82.04,102.36,73.51z" style="fill:url(#SVGID_4_);"/>
 </g>
-<path id="mouth" d="M72.23,76.15c-3.13,1.86-13.37,1.86-16.5,0c-1.79-1.07-3.63,0.56-2.88,2.2 c0.73,1.6,6.32,5.32,11.16,5.32s10.35-3.72,11.08-5.32C75.84,76.72,74.03,75.08,72.23,76.15z" style="fill:#795548;"/>
-<path id="nose" d="M67.79,68.38c-0.1-0.04-0.21-0.07-0.32-0.08h-6.94c-0.11,0.01-0.21,0.04-0.32,0.08 c-0.63,0.25-0.98,0.91-0.68,1.6s1.68,2.64,4.46,2.64c2.79,0,4.17-1.95,4.46-2.64C68.76,69.29,68.42,68.64,67.79,68.38z" style="fill:#E59600;"/>
-<path d="M97.98,32.14C97.03,31.44,83,23.43,64,23.43c-19,0.01-33.03,8.01-33.98,8.72 c-3.91,2.91-5.06,6-4.47,10.86c0.34,2.85,2.97,3.93,4.66,3.34c0,0,16.26-3.93,33.78-3.94c17.53,0,33.78,3.94,33.78,3.94 c1.7,0.59,4.32-0.49,4.66-3.34C103.03,38.14,101.88,35.05,97.98,32.14z" style="fill:#F5F5F5;"/>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
+<g>
+</g>
 </svg>
-
-    """
+"""
 
     # Convert SVG to image
     image = svg_to_image(svg_code)
+    image_ref = svg_to_image(svg_code_ref)
+    print(clip_image_image_pixel_distances_batch(image, image_ref))
     # image.show()  # Display the image
-
+   
     # Compute CLIP distance
-    text = "Santa Claus"
-    black_image = Image.new('RGB', (256, 256), color='black')
-    distance = clip_text_image_distance(text, image)
-    print(f"CLIP Distance: {1-distance, 1-clip_text_image_distance(text, black_image)}")
+    # text = "A black and white graphic representation of a percentage sign"
+    # black_image = Image.new('RGB', (256, 256), color='black')
+    # distance = clip_text_image_distance(text, image)
+    # print(f"CLIP Distance: {1-distance, 1-clip_text_image_distance(text, black_image)}")

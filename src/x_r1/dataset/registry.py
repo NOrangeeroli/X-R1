@@ -7,7 +7,11 @@ from .math500.dataset import Math500Dataset
 from .aime.dataset import AIMEDataset
 from .coco.dataset import COCODataset
 from .cifar.dataset import CifarDataset
-from .reward import Reward, SVGReward
+from .instruct_svg.dataset import InstructSVGDataset
+from .sgp_bench.dataset import SGPBenchDataset
+from .draw_svg.dataset import DrawSVGDataset
+from .reward import Reward, SVGReward, SVGImageReward
+
 # Registry for datasets
 DATASETS = {
     "xdg": XDGDataset,
@@ -16,6 +20,9 @@ DATASETS = {
     "aime": AIMEDataset,
     "coco": COCODataset,
     "cifar": CifarDataset,
+    "instruct_svg": InstructSVGDataset,
+    "sgp_bench":SGPBenchDataset,
+    "draw_svg": DrawSVGDataset,
     # Add more datasets here
 }
 
@@ -24,8 +31,8 @@ REWARDS = {
     "bigmath": Reward,
     "math500": Reward,
     "aime": Reward,
-    "coco": SVGReward,
-    "cifar": SVGReward,
+    "svg": SVGReward,
+    "svg_image": SVGImageReward,
 }
 
 
@@ -44,6 +51,13 @@ def get_dataset_class(dataset_name: str):
         dataset_name = "coco"
     elif dataset_name == "uoft-cs/cifar100":
         dataset_name = "cifar"
+    elif dataset_name == "uwunion/instruct_svg":
+        dataset_name = "instruct_svg"
+    elif dataset_name == "sgp-bench/sit_55k":
+        dataset_name = "sgp_bench"
+    elif dataset_name == "achang/draw_svg":
+        dataset_name = "draw_svg"
+        
         
     if dataset_name not in DATASETS:
         raise ValueError(f"Dataset {dataset_name} not found. Available datasets: {list(DATASETS.keys())}")
@@ -62,7 +76,14 @@ def get_reward_class(reward_name: str) -> Type[Any]:
     elif reward_name == "phiyodr/coco2017":
         reward_name = "coco"
     elif reward_name == "uoft-cs/cifar100":
-        reward_name = "cifar"
+        reward_name = "svg"
+    elif reward_name == "uwunion/instruct_svg":
+        reward_name = "svg"
+        
+    elif reward_name == "sgp-bench/sit_55k":
+        reward_name = "svg_image"
+    elif reward_name == "achang/draw_svg":
+        reward_name = "svg"
     if reward_name not in REWARDS:
         raise ValueError(f"Reward {reward_name} not found. Available rewards: {list(REWARDS.keys())}")
     return REWARDS[reward_name]

@@ -215,7 +215,8 @@ def main(script_args, training_args, model_args):
         )
     else:
         eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
-    assert len(eval_dataset) <=100
+    if eval_dataset is not None:
+        assert len(eval_dataset) <=100
     
     train_dataset=dataset[script_args.dataset_train_split]
     print(train_dataset[0])

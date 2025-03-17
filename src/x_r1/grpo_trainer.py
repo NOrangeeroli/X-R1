@@ -875,11 +875,13 @@ class GRPOTrainer(Trainer):
 
         self._metrics["reward"].append(rewards.mean().item())
         self._metrics["reward_std"].append(std_grouped_rewards.mean().item())
-
+        solutions = [x["solution"] for x in inputs]
+        # print(len(solutions))
         if self.log_completions and self.state.global_step % self.args.logging_steps == 0:
             prompts_to_log = gather_object(prompts_text)
             completions_to_log = gather_object(completions_text)
             rewards_to_log = rewards.tolist()
+            solutions_to_log = gather_object(solutions)
 
             if self.accelerator.is_main_process:
                 
@@ -893,6 +895,19 @@ class GRPOTrainer(Trainer):
                         "completion": completions_to_log,
                         "reward": rewards.tolist(),
                     }
+                    
+                        
+                        
+                    
+                    # print(len(solutions_to_log), len(rewards.tolist()))
+                    table["solution"] = solutions_to_log
+                    for i, reward_func in enumerate(self.reward_funcs):
+                        if isinstance(reward_func, nn.Module):  # Module instead of PretrainedModel for compat with compiled models
+                            reward_func_name = reward_func.config._name_or_path.split("/")[-1]
+                        else:
+                            reward_func_name = reward_func.__name__
+                        table[f"rewards/{reward_func_name}"] = rewards_per_func[:,i].tolist()
+                        
                     df = pd.DataFrame(table)
                     wandb.log({f"completions/step_{str(self.state.global_step)}": wandb.Table(dataframe=df)})
         rewards = rewards[process_slice]
