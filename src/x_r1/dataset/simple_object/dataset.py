@@ -14,8 +14,6 @@ class SimpleObjectDataset:
     """
     Dataset loader and processor for XDG Dataset
     """
-    
-    
     @staticmethod
     def load_dataset(
         dataset_name: str,
@@ -25,76 +23,39 @@ class SimpleObjectDataset:
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
         """
-        Create a synthetic dataset with entries of 'dog'
+        Load the dataset from HuggingFace or local source
         """
-        import os
-        import csv
-        
-        # Get rank info for distributed training
-        rank = int(os.environ.get("RANK", "0"))
-        
-        # Set cache directory
-        default_cache_dir = os.path.dirname(os.path.abspath(__file__))
-        cache_dir = kwargs.get("cache_dir", default_cache_dir)
-        
-        # Define file paths
-        train_csv_path = f"{cache_dir}/simple_object_train.csv"
-        test_csv_path = f"{cache_dir}/simple_object_test.csv"
-        os.makedirs(cache_dir, exist_ok=True)
-        
-        # Only rank 0 creates files if they don't exist
-        if rank == 0:
-            print(f"Rank {rank}: Creating CSV dataset files")
-            
-            # Create training data CSV
-            with open(train_csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['input', 'output'])  # Header
-                for _ in range(500):
-                    writer.writerow(['a dog.', '-'])
-            
-            # Create test data CSV
-            with open(test_csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['input', 'output'])  # Header
-                for _ in range(100):
-                    writer.writerow(['a dog.', ''])
-            
-            print(f"Rank {rank}: CSV files created at {cache_dir}")
-        
-        # If in distributed setting, wait for rank 0 to finish
-        if "WORLD_SIZE" in os.environ and int(os.environ["WORLD_SIZE"]) > 1:
-            import torch.distributed as dist
-            if dist.is_initialized():
-                dist.barrier()
-        
-        # Now all processes load the dataset using load_dataset
-        print(f"Rank {rank}: Loading dataset from CSV files")
-        dataset = load_dataset('csv', 
-                            data_files={'train': train_csv_path, 
-                                        'test': test_csv_path},
-                            )
-        
-        # Process dataset - exactly like the working InstructSVGDataset
+        dataset = load_dataset("uwunion/instruct_svg")
         for split in dataset:
             if "solution" in dataset[split].column_names:
                 dataset[split] = dataset[split].remove_columns("solution")
-        
-        # Use the simpler map without parameters - just like InstructSVGDataset
+            
+            dataset[split] = dataset[split].rename_column("output", "svg")
+            dataset[split] = dataset[split].rename_column("input", "solution")
         dataset = dataset.map(SimpleObjectDataset.process_example)
+        # import pdb; pdb.set_trace()
+        # for split in dataset:
+        #     dataset[split] = dataset[split].filter(
+        #         lambda example: 'black and white' not in example['input'].lower()
+        #     )
         
-        # Apply sample limits if needed
+        # Apply filtering or selection if needed
+        # dataset = dataset['test']
+        
         if max_train_samples and max_train_samples > 0:
-            if "train" in dataset:
-                dataset["train"] = dataset["train"].select(range(min(max_train_samples, len(dataset["train"]))))
+            for split in dataset:
+                if split == "train":
+                    dataset[split] = dataset[split].select(range(min(max_train_samples, len(dataset[split]))))
         
         if max_test_samples and max_test_samples > 0:       
-            if "test" in dataset:
-                dataset["test"] = dataset["test"].select(range(min(max_test_samples, len(dataset["test"]))))
-                
+            for split in dataset:
+                if split == "validation":
+                    dataset[split] = dataset[split].select(range(min(max_test_samples, len(dataset[split]))))    
         return dataset
     
+        
     
+
     @staticmethod
     def process_example(example: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -105,10 +66,10 @@ class SimpleObjectDataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['input']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['solution']}"},
             ],
-            "solution": example["input"],
-            "svg": example["output"]
+            # "solution": example["input"],
+            # "svg": example["output"]
         }
             
    
