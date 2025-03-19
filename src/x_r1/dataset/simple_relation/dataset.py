@@ -1,6 +1,8 @@
 from typing import Dict, List, Optional, Union, Any
 from datasets import load_dataset, Dataset, IterableDataset
 import torch
+import pandas as pd
+from datasets import DatasetDict
 SYSTEM_PROMPT = (
     "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
     "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
@@ -8,13 +10,12 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think>\n<answer> answer here </answer>"
 )
 
-class InstructSVGDataset:
+class SimpleObjectDataset:
     """
     Dataset loader and processor for XDG Dataset
     """
     
 
-    
     @staticmethod
     def load_dataset(
         dataset_name: str,
@@ -24,25 +25,46 @@ class InstructSVGDataset:
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
         """
-        Load the dataset from HuggingFace or local source
+        Create a synthetic dataset with 1000 entries of 'dog'
         """
-        dataset = load_dataset(dataset_name)
+        
+        
+        # Create a dictionary with 1000 entries of 'dog'
+        num_samples = 1000
+        data_dict = {
+            "input": ["a dog."] * num_samples,
+            "output": [""""""] * num_samples  
+        }
+        
+        # Create a pandas DataFrame and then convert to HuggingFace Dataset
+        df = pd.DataFrame(data_dict)
+        train_dataset = Dataset.from_pandas(df)
+        
+        # Create a smaller validation set - let's say 100 samples
+        val_data_dict = {
+            "input": ["a dog."] * 100,
+            "output": ["<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"] * 100
+        }
+        val_df = pd.DataFrame(val_data_dict)
+        val_dataset = Dataset.from_pandas(val_df)
+        
+        # Combine into a DatasetDict with train and validation splits
+        dataset = DatasetDict({
+            "train": train_dataset,
+            "test": val_dataset
+        })
+        
+        # The rest of the processing remains the same
         for split in dataset:
             if "solution" in dataset[split].column_names:
                 dataset[split] = dataset[split].remove_columns("solution")
             
             dataset[split] = dataset[split].rename_column("output", "svg")
             dataset[split] = dataset[split].rename_column("input", "solution")
-        dataset = dataset.map(InstructSVGDataset.process_example)
-        # import pdb; pdb.set_trace()
-        # for split in dataset:
-        #     dataset[split] = dataset[split].filter(
-        #         lambda example: 'black and white' not in example['input'].lower()
-        #     )
         
-        # Apply filtering or selection if needed
-        # dataset = dataset['test']
+        dataset = dataset.map(SimpleObjectDataset.process_example)
         
+        # Apply sample limits if needed
         if max_train_samples and max_train_samples > 0:
             for split in dataset:
                 if split == "train":
@@ -50,10 +72,10 @@ class InstructSVGDataset:
         
         if max_test_samples and max_test_samples > 0:       
             for split in dataset:
-                if split == "validation":
+                if split == "test":
                     dataset[split] = dataset[split].select(range(min(max_test_samples, len(dataset[split]))))    
+        
         return dataset
-    
     @staticmethod
     def process_example(example: Dict[str, Any]) -> Dict[str, Any]:
         """

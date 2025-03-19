@@ -1017,7 +1017,7 @@ class GRPOTrainer(Trainer):
         if return_outputs:
             raise ValueError("The GRPOTrainer does not support returning outputs")
         # Compute the per-token log probabilities for the model
-
+        # print("start compute_loss")
         prompt_ids, prompt_mask = inputs["prompt_ids"], inputs["prompt_mask"]
         completion_ids, completion_mask = inputs["completion_ids"], inputs["completion_mask"]
         input_ids = torch.cat([prompt_ids, completion_ids], dim=1)
@@ -1025,7 +1025,7 @@ class GRPOTrainer(Trainer):
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
 
         per_token_logps = self._get_per_token_logps(model, input_ids, attention_mask, logits_to_keep)
-
+        # print("_get_per_token_logps")
         # Compute the KL divergence between the model and the reference model
         if self.beta != 0.0:
             ref_per_token_logps = inputs["ref_per_token_logps"]
@@ -1037,7 +1037,7 @@ class GRPOTrainer(Trainer):
         seq_logps = (per_token_logps * completion_mask).sum(dim=1) / completion_mask.sum(dim=1)
         rewards = inputs["rewards"]
         reg_term = self._calculate_logp_variance_regularization(seq_logps, rewards)
-
+        # print("_calculate_logp_variance_regularization")
 
         # Compute the loss
         advantages = inputs["advantages"]
@@ -1155,7 +1155,9 @@ class GRPOTrainer(Trainer):
         return local_reg
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys: Optional[list[str]] = None):
+        # print("start prediction_step")
         inputs = self._prepare_inputs(inputs)
+        # print("_prepare_inputs")
         with torch.no_grad():
             with self.compute_loss_context_manager():
                 loss = self.compute_loss(model, inputs)

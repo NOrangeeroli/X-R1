@@ -140,7 +140,8 @@ class Reward:
         return rewards
     
     
-from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch
+from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch
+
 class SVGReward:
     @staticmethod
     def extract_answer(text):
@@ -222,6 +223,21 @@ class SVGReward:
         images = [svg_to_image(content) for content in ans]
         
         distances = clip_text_image_distances_batch(solution, images)
+        rewards = [1.0 - distance for distance in distances]
+        return rewards
+    @staticmethod
+    def perceptual_reward(completions, svg, **kwargs):
+        
+        
+        
+        completion_contents = [completion[0]["content"] for completion in completions]
+        ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
+        ans_ref = [SVGImageReward.extract_svg(content) for content in svg]
+        rewards = []
+        images = [svg_to_image(content) for content in ans]
+        ref_images = [svg_to_image(content) for content in ans_ref]
+        
+        distances = dinov2_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
         return rewards
         
@@ -307,7 +323,7 @@ class SVGImageReward:
         images = [svg_to_image(content) for content in ans]
         ref_images = [svg_to_image(content) for content in ans_ref]
         
-        distances = clip_image_image_distances_batch(ref_images, images)
+        distances = vgg_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
         return rewards
         

@@ -7,8 +7,56 @@ from torchvision import transforms
 from lxml import etree
 from functools import lru_cache
 import os
-
+import torch
+import torch.nn as nn
+import torchvision.models as models
 from typing import Union, List
+
+
+# Cache for DinoV2 models
+_dinov2_models = {}
+
+@lru_cache(maxsize=30)
+def get_dinov2_model(model_name="dinov2_vits14", device=None):
+    """Get DinoV2 model in a distributed-friendly way
+    
+    Args:
+        model_name (str): The DinoV2 model to load:
+            - "dinov2_vits14" (small - 21M parameters)
+            - "dinov2_vitb14" (base - 86M parameters)
+            - "dinov2_vitl14" (large - 304M parameters)
+            - "dinov2_vitg14" (giant - 1.1B parameters)
+        device: The device to load the model on
+        
+    Returns:
+        nn.Module: DinoV2 model for feature extraction
+    """
+    # Get local process info
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    
+    if device is None:
+        # Default to CPU for prediction to avoid CUDA synchronization issues
+        device = "cpu"
+    
+    # Create a unique key for this process, model and device
+    model_key = f"{local_rank}_{model_name}_{device}"
+    
+    if model_key not in _dinov2_models:
+        try:
+            # Load model from torch hub
+            model = torch.hub.load('facebookresearch/dinov2', model_name)
+            model = model.to(device).eval()
+            
+            # Freeze parameters to ensure we're only doing inference
+            for param in model.parameters():
+                param.requires_grad = False
+                
+            _dinov2_models[model_key] = model
+            
+        except Exception as e:
+            raise ValueError(f"Error loading DinoV2 model {model_name}: {e}")
+    
+    return _dinov2_models[model_key]
 
 # Load CLIP model
 _clip_models = {}
@@ -31,6 +79,53 @@ def get_clip_model(model_name="ViT-B/32", device=None):
         _clip_models[model_key] = (model, preprocess)
     
     return _clip_models[model_key]
+
+
+
+# Cache for VGG models
+_vgg_models = {}
+
+@lru_cache(maxsize=30)
+def get_vgg_model(model_name="vgg19", layer_index=8, device=None):
+    """Get VGG model in a distributed-friendly way
+    
+    Args:
+        model_name (str): The VGG model to load ("vgg19" or "vgg16")
+        layer_index (int): Index of the layer to use for feature extraction
+        device: The device to load the model on
+        
+    Returns:
+        nn.Sequential: Feature extractor model that outputs features at the specified layer
+    """
+    # Get local process info
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    
+    if device is None:
+        # Default to CPU for prediction to avoid CUDA synchronization issues
+        device = "cpu"
+    
+    # Create a unique key for this process, model, layer and device
+    model_key = f"{local_rank}_{model_name}_{layer_index}_{device}"
+    
+    if model_key not in _vgg_models:
+        # Load model for this specific process
+        if model_name == "vgg19":
+            vgg_model = models.vgg19(pretrained=True).features.to(device)
+        elif model_name == "vgg16":
+            vgg_model = models.vgg16(pretrained=True).features.to(device)
+        else:
+            raise ValueError(f"Unsupported model: {model_name}. Use 'vgg19' or 'vgg16'")
+        
+        # Create feature extractor up to the specified layer
+        feature_extractor = nn.Sequential(*list(vgg_model.children())[:layer_index]).eval().to(device)
+        
+        # Freeze parameters
+        for param in feature_extractor.parameters():
+            param.requires_grad = False
+            
+        _vgg_models[model_key] = feature_extractor
+    
+    return _vgg_models[model_key]
 
 # device_id = 0  # Use the first GPU
 # # device = f"cuda:{device_id}" if torch.cuda.is_available() else "cpu"
@@ -422,18 +517,222 @@ def clip_image_image_pixel_distances_batch(
         return distances[0]
     
     return distances
+
+
+def vgg_image_image_distances_batch(
+    reference_images: Union[Image.Image, List[Image.Image]], 
+    query_images: Union[Image.Image, List[Image.Image]], 
+    layer_index=8,
+    device=None
+) -> Union[float, List[float]]:
+    """
+    Computes the perceptual distance between reference images and query images using VGG19 features.
+    
+    Args:
+        reference_images: Either a single PIL Image or a list of PIL Images.
+        query_images: Either a single PIL Image or a list of PIL Images.
+        layer_index: Index of the VGG19 layer to use for feature extraction (default: 8).
+        device: Device to run the model on.
+    
+    Returns:
+        If both inputs are single items: a float representing the distance
+        If either input is a list: a list of distances
+    """
+    # Handle single inputs
+    single_reference = isinstance(reference_images, Image.Image)
+    single_query = isinstance(query_images, Image.Image)
+    
+    if single_reference:
+        reference_images = [reference_images]
+    if single_query:
+        query_images = [query_images]
+    
+    # Determine device if not provided
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if device is None:
+        device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    
+    print(f"vgg_image_image_distances_batch: device: {device}")
+    
+    # Load the pre-trained VGG19 model and transfer it to the device
+    
+    feature_extractor = get_vgg_model(model_name="vgg19", layer_index=layer_index, device=device)
+    # Freeze the feature extractor's parameters
+    for param in feature_extractor.parameters():
+        param.requires_grad = False
+    
+    # Define preprocessing for PIL Images
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    
+    # Filter out None images and track valid indices
+    valid_ref_indices = []
+    valid_ref_images = []
+    for i, img in enumerate(reference_images):
+        if img is not None:
+            valid_ref_indices.append(i)
+            valid_ref_images.append(prepare_image(img))
+    
+    valid_query_indices = []
+    valid_query_images = []
+    for i, img in enumerate(query_images):
+        if img is not None:
+            valid_query_indices.append(i)
+            valid_query_images.append(prepare_image(img))
+    
+    # Initialize distances with default value (1.0 means maximum distance)
+    distances = [1.0] * len(reference_images)
+    
+    # Only process if we have valid images in both sets
+    if valid_ref_images and valid_query_images:
+        with torch.no_grad():
+            try:
+                # Process all reference images at once
+                ref_tensors = torch.stack([preprocess(img) for img in valid_ref_images]).to(device)
+                ref_features = feature_extractor(ref_tensors)
+                
+                # Process all query images at once
+                query_tensors = torch.stack([preprocess(img) for img in valid_query_images]).to(device)
+                query_features = feature_extractor(query_tensors)
+                
+                # Get features for corresponding pairs and compute MSE
+                for i, query_idx in enumerate(valid_query_indices):
+                    ref_position = valid_ref_indices.index(query_idx) if query_idx in valid_ref_indices else -1
+                    if ref_position >= 0:
+                        # Extract features for this specific pair
+                        query_feat = query_features[i].unsqueeze(0)
+                        ref_feat = ref_features[ref_position].unsqueeze(0)
+                        
+                        # Calculate MSE between feature representations
+                        mse = nn.functional.mse_loss(query_feat, ref_feat).item()
+                        
+                        # Normalize MSE to 0-1 range (empirical scaling)
+                        # The scaling factor (10.0) might need adjustment based on your specific use case
+                        distances[query_idx] = min(1.0, mse / 100.0)
+            except RuntimeError as e:
+                print(f"Error processing images in one batch: {e}")
+                print("Consider processing in smaller batches for large datasets")
+                # Fall back to default distances (1.0)
+    
+    # Return single value if both inputs were single items
+    if single_reference and single_query and len(distances) == 1:
+        return distances[0]
+    
+    return distances
+
+
+def dinov2_image_image_distances_batch(
+    reference_images: Union[Image.Image, List[Image.Image]], 
+    query_images: Union[Image.Image, List[Image.Image]], 
+    model_name="dinov2_vits14",
+    device=None
+) -> Union[float, List[float]]:
+    """
+    Computes the feature distance between reference images and query images using DinoV2 features.
+    
+    Args:
+        reference_images: Either a single PIL Image or a list of PIL Images.
+        query_images: Either a single PIL Image or a list of PIL Images.
+        model_name: DinoV2 model variant to use ("dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14").
+        device: Device to run the model on.
+    
+    Returns:
+        If both inputs are single items: a float representing the distance
+        If either input is a list: a list of distances
+    """
+    # Handle single inputs
+    single_reference = isinstance(reference_images, Image.Image)
+    single_query = isinstance(query_images, Image.Image)
+    
+    if single_reference:
+        reference_images = [reference_images]
+    if single_query:
+        query_images = [query_images]
+    
+    # Determine device if not provided
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if device is None:
+        device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    
+    print(f"dinov2_image_image_distances_batch: device: {device}")
+    
+    # Get the DinoV2 model with caching
+    model = get_dinov2_model(model_name=model_name, device=device)
+    
+    # Define preprocessing for DinoV2
+    preprocess = transforms.Compose([
+        transforms.Resize(224),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    
+    # Filter out None images and track valid indices
+    valid_ref_indices = []
+    valid_ref_images = []
+    for i, img in enumerate(reference_images):
+        if img is not None:
+            valid_ref_indices.append(i)
+            valid_ref_images.append(prepare_image(img))
+    
+    valid_query_indices = []
+    valid_query_images = []
+    for i, img in enumerate(query_images):
+        if img is not None:
+            valid_query_indices.append(i)
+            valid_query_images.append(prepare_image(img))
+    
+    # Initialize distances with default value (1.0 means maximum distance)
+    distances = [1.0] * len(reference_images)
+    
+    # Only process if we have valid images in both sets
+    if valid_ref_images and valid_query_images:
+        with torch.no_grad():
+            try:
+                # Process all reference images at once
+                ref_tensors = torch.stack([preprocess(img) for img in valid_ref_images]).to(device)
+                ref_features = model(ref_tensors)
+                
+                # Normalize features (DinoV2 outputs are typically already normalized, but ensure it)
+                ref_features = ref_features / ref_features.norm(dim=1, keepdim=True)
+                
+                # Process all query images at once
+                query_tensors = torch.stack([preprocess(img) for img in valid_query_images]).to(device)
+                query_features = model(query_tensors)
+                query_features = query_features / query_features.norm(dim=1, keepdim=True)
+                
+                # Get features for corresponding pairs and compute distances
+                for i, query_idx in enumerate(valid_query_indices):
+                    ref_position = valid_ref_indices.index(query_idx) if query_idx in valid_ref_indices else -1
+                    if ref_position >= 0:
+                        # Extract features for this specific pair
+                        query_feat = query_features[i]
+                        ref_feat = ref_features[ref_position]
+                        
+                        # Calculate cosine distance (1 - cosine similarity)
+                        cosine_sim = torch.sum(query_feat * ref_feat).item()
+                        distances[query_idx] = 1.0 - cosine_sim
+            except RuntimeError as e:
+                print(f"Error processing images in one batch: {e}")
+                print("Consider processing in smaller batches for large datasets")
+                # Fall back to default distances (1.0)
+    
+    # Return single value if both inputs were single items
+    if single_reference and single_query and len(distances) == 1:
+        return distances[0]
+    
+    return distances
+
+
 if __name__ == "__main__":
-    svg_code = """<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-  <defs>
-    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="red"/>
-      <stop offset="100%" stop-color="white"/>
-    </linearGradient>
-  </defs>
-  <rect x="0" y="0" width="100" height="100" fill="url(#gradient)" />
-  <polygon points="10,10 90,10 90,90 10,90" fill="white" />
-  <polygon points="50,20 50,80" fill="none" stroke="red" stroke-width="3" />
-  <polygon points="20,50 80,50" fill="none" stroke="red" stroke-width="3" />
+    svg_code = """<!-- To create an SVG for a clipboard icon that could represent a medical file, I'll design a simple version with a black and white fill. The clipboard will consist of a rectangle and two overlapping triangles on top. -->
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<rect x="20" y="40" width="60" height="20" fill="black"/>
+<polygon points="50,30 80,70 20,70" fill="white"/>
+<polygon points="50,30 80,70 20,70" fill="black" opacity="0.5"/>
 </svg>"""
     svg_code_ref = """
 <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
@@ -504,8 +803,9 @@ if __name__ == "__main__":
 
     # Convert SVG to image
     image = svg_to_image(svg_code)
-    image_ref = svg_to_image(svg_code_ref)
-    print(clip_image_image_pixel_distances_batch(image, image_ref))
+    image.save("test.png")
+    # image_ref = svg_to_image(svg_code_ref)
+    # print(clip_image_image_pixel_distances_batch(image, image_ref))
     # image.show()  # Display the image
    
     # Compute CLIP distance

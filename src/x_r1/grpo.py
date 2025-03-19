@@ -164,6 +164,7 @@ def main(script_args, training_args, model_args):
     REWARD_FUNCS_REGISTRY = {
         "accuracy": reward_class.accuracy_reward,
         "format": reward_class.format_reward,
+        "perceptual": reward_class.perceptual_reward,
         # "reasoning_steps": reasoning_steps_reward,
         # "cosine": get_cosine_scaled_reward(
         #     min_value_wrong=script_args.cosine_min_value_wrong,
@@ -216,10 +217,12 @@ def main(script_args, training_args, model_args):
     else:
         eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
     if eval_dataset is not None:
+        
         assert len(eval_dataset) <=100
     
     train_dataset=dataset[script_args.dataset_train_split]
-    print(train_dataset[0])
+    # import pdb;pdb.set_trace()
+    print(train_dataset)
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
         # model = model,

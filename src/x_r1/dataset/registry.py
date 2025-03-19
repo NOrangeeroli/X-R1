@@ -10,6 +10,7 @@ from .cifar.dataset import CifarDataset
 from .instruct_svg.dataset import InstructSVGDataset
 from .sgp_bench.dataset import SGPBenchDataset
 from .draw_svg.dataset import DrawSVGDataset
+from .simple_object.dataset import SimpleObjectDataset
 from .reward import Reward, SVGReward, SVGImageReward
 
 # Registry for datasets
@@ -23,6 +24,7 @@ DATASETS = {
     "instruct_svg": InstructSVGDataset,
     "sgp_bench":SGPBenchDataset,
     "draw_svg": DrawSVGDataset,
+    "simple_object": SimpleObjectDataset
     # Add more datasets here
 }
 
@@ -57,6 +59,8 @@ def get_dataset_class(dataset_name: str):
         dataset_name = "sgp_bench"
     elif dataset_name == "achang/draw_svg":
         dataset_name = "draw_svg"
+    elif dataset_name == "simple_object":
+        dataset_name = "simple_object"
         
         
     if dataset_name not in DATASETS:
@@ -83,6 +87,8 @@ def get_reward_class(reward_name: str) -> Type[Any]:
     elif reward_name == "sgp-bench/sit_55k":
         reward_name = "svg_image"
     elif reward_name == "achang/draw_svg":
+        reward_name = "svg"
+    elif reward_name == "simple_object":
         reward_name = "svg"
     if reward_name not in REWARDS:
         raise ValueError(f"Reward {reward_name} not found. Available rewards: {list(REWARDS.keys())}")
