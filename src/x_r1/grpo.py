@@ -69,7 +69,7 @@ class GRPOScriptArguments(ScriptArguments):
         metadata={"help": "The maximum number of samples to load from the dataset."}
     )
     reward_funcs: list[str] = field(
-        default_factory=lambda: ["accuracy", "format"],
+        default_factory=lambda: [ "format", "accuracy", "perceptual"],
         metadata={
             "help": "List of reward functions. Possible values: 'accuracy', 'format', 'reasoning_steps', 'cosine', 'repetition_penalty', 'length'"
         },
@@ -222,7 +222,7 @@ def main(script_args, training_args, model_args):
     
     train_dataset=dataset[script_args.dataset_train_split]
     # import pdb;pdb.set_trace()
-    print(train_dataset)
+    print(train_dataset[0])
     trainer = GRPOTrainer(
         model=model_args.model_name_or_path,
         # model = model,

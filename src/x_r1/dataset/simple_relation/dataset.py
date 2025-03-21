@@ -10,7 +10,7 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think>\n<answer> answer here </answer>"
 )
 
-class SimpleObjectDataset:
+class SimpleRelationDataset:
     """
     Dataset loader and processor for XDG Dataset
     """
@@ -31,9 +31,12 @@ class SimpleObjectDataset:
         
         # Create a dictionary with 1000 entries of 'dog'
         num_samples = 1000
+        items = ['a triangle', 'a square', 'a circle', 'a rectangle', 'a pentagon', 'a hexagon', 'a heptagon', 'an octagon', 'a nonagon', 'a decagon', 'an arrow', 'a vertical line', 'a horizontal line', 'a diagonal line', 'a zigzag line', 'a wavy line', 'a spiral', 'a star', 'a trapezoid', 'a parallelogram']
+        relations = ['above', 'below', 'on the left of', 'on the right of', 'inside',  'intersecting', 'overlapping', 'adjacent to',]
+        inputs = [x + ' ' + y + ' ' + z for x in items for y in relations for z in items]
         data_dict = {
-            "input": ["a dog."] * num_samples,
-            "output": [""""""] * num_samples  
+            "input": inputs,
+            "output": [""""""] * len(inputs)  
         }
         
         # Create a pandas DataFrame and then convert to HuggingFace Dataset
@@ -41,17 +44,12 @@ class SimpleObjectDataset:
         train_dataset = Dataset.from_pandas(df)
         
         # Create a smaller validation set - let's say 100 samples
-        val_data_dict = {
-            "input": ["a dog."] * 100,
-            "output": ["<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"] * 100
-        }
-        val_df = pd.DataFrame(val_data_dict)
-        val_dataset = Dataset.from_pandas(val_df)
+        
+    
         
         # Combine into a DatasetDict with train and validation splits
         dataset = DatasetDict({
             "train": train_dataset,
-            "test": val_dataset
         })
         
         # The rest of the processing remains the same
@@ -62,7 +60,7 @@ class SimpleObjectDataset:
             dataset[split] = dataset[split].rename_column("output", "svg")
             dataset[split] = dataset[split].rename_column("input", "solution")
         
-        dataset = dataset.map(SimpleObjectDataset.process_example)
+        dataset = dataset.map(SimpleRelationDataset.process_example)
         
         # Apply sample limits if needed
         if max_train_samples and max_train_samples > 0:

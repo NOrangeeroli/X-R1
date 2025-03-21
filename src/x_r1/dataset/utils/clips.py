@@ -12,6 +12,104 @@ import torch.nn as nn
 import torchvision.models as models
 from typing import Union, List
 
+# Cache for SigLIP models
+_siglip_models = {}
+
+@lru_cache(maxsize=30)
+def get_siglip_model(model_name="google/siglip-base-patch16-224", device=None):
+    """Get SigLIP model in a distributed-friendly way
+    
+    Args:
+        model_name (str): The SigLIP model to load from Hugging Face:
+            - "google/siglip-base-patch16-224" (base)
+            - "google/siglip-large-patch16-224" (large)
+        device: The device to load the model on
+        
+    Returns:
+        tuple: (model, processor) for feature extraction
+    """
+    from transformers import AutoProcessor, AutoModel
+    
+    # Get local process info
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    
+    if device is None:
+        # Default to CPU for prediction to avoid CUDA synchronization issues
+        device = "cpu"
+    
+    # Create a unique key for this process, model and device
+    model_key = f"{local_rank}_{model_name}_{device}"
+    
+    if model_key not in _siglip_models:
+        try:
+            # Load model and processor from Hugging Face
+            processor = AutoProcessor.from_pretrained(model_name)
+            model = AutoModel.from_pretrained(model_name).to(device).eval()
+            
+            # Freeze parameters to ensure we're only doing inference
+            for param in model.parameters():
+                param.requires_grad = False
+                
+            _siglip_models[model_key] = (model, processor)
+            
+        except Exception as e:
+            raise ValueError(f"Error loading SigLIP model {model_name}: {e}")
+    
+    return _siglip_models[model_key]
+
+# Cache for MAE models
+_mae_models = {}
+
+@lru_cache(maxsize=30)
+def get_mae_model(model_name="mae_vit_base_patch16", device=None):
+    """Get MAE (Masked Autoencoder) model in a distributed-friendly way
+    
+    Args:
+        model_name (str): The MAE model variant:
+            - "mae_vit_base_patch16" (base)
+            - "mae_vit_large_patch16" (large)
+            - "mae_vit_huge_patch14" (huge)
+        device: The device to load the model on
+        
+    Returns:
+        tuple: (model, preprocess) for feature extraction
+    """
+    import torchvision.transforms as transforms
+    
+    # Get local process info
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    
+    if device is None:
+        # Default to CPU for prediction to avoid CUDA synchronization issues
+        device = "cpu"
+    
+    # Create a unique key for this process, model and device
+    model_key = f"{local_rank}_{model_name}_{device}"
+    
+    if model_key not in _mae_models:
+        try:
+            # Load model from torch hub
+            model = torch.hub.load('facebookresearch/mae', model_name, pretrained=True)
+            model = model.to(device).eval()
+            
+            # Freeze parameters to ensure we're only doing inference
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            # Define preprocessing for MAE (similar to ViT models)
+            preprocess = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+            
+            _mae_models[model_key] = (model, preprocess)
+            
+        except Exception as e:
+            raise ValueError(f"Error loading MAE model {model_name}: {e}")
+    
+    return _mae_models[model_key]
 
 # Cache for DinoV2 models
 _dinov2_models = {}
