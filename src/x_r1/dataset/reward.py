@@ -140,7 +140,7 @@ class Reward:
         return rewards
     
     
-from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch
+from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch,siglip_text_image_distances_batch
 
 class SVGReward:
     @staticmethod
@@ -222,7 +222,7 @@ class SVGReward:
         rewards = []
         images = [svg_to_image(content) for content in ans]
         
-        distances = clip_text_image_distances_batch(solution, images)
+        distances = siglip_text_image_distances_batch(solution, images)
         rewards = [1.0 - distance for distance in distances]
         return rewards
     @staticmethod

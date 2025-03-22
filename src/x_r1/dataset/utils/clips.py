@@ -438,6 +438,97 @@ def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[
     return distances
 # Example Usage
 
+def siglip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[Image.Image, List[Image.Image]], model_name="google/siglip-base-patch16-224", device=None) -> Union[float, List[float]]:
+    """
+    Computes the cosine distance between texts and images using SigLIP embeddings in batch mode.
+    
+    Args:
+        texts: Either a single text string or a list of text strings.
+        images: Either a single PIL Image or a list of PIL Images.
+        model_name: SigLIP model to use ("google/siglip-base-patch16-224" or "google/siglip-large-patch16-224")
+        device: Device to run the model on.
+    
+    Returns:
+        If both inputs are single items: a float representing the distance
+        If either input is a list: a list of distances
+    """
+    # Handle single inputs
+    single_text = isinstance(texts, str)
+    single_image = isinstance(images, Image.Image)
+    
+    if single_text:
+        texts = [texts]
+    if single_image:
+        images = [images]
+    
+    # Determine device
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    
+    if device is None:
+        device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    print(f"siglip_text_image_distance_batch: device: {device}")
+    
+    # Get model and processor
+    model, processor = get_siglip_model(model_name=model_name, device=device)
+    
+    distances = []
+    
+    # Keep track of None images
+    valid_indices = []
+    valid_images = []
+    for i, img in enumerate(images):
+        if img is not None:
+            valid_indices.append(i)
+            valid_images.append(prepare_image(img))
+    
+    # Initialize distances with ones (maximum distance for None images)
+    batch_distances = [1.0] * len(texts)
+    
+    # Only process if we have valid images
+    if valid_images:
+        with torch.no_grad():
+            # Process text batch - only for valid indices
+            valid_texts = [texts[i] for i in valid_indices]
+            
+            # Process in smaller batches if needed (to prevent OOM errors)
+            batch_size = 32  # Adjust based on your GPU memory
+            
+            for batch_start in range(0, len(valid_indices), batch_size):
+                batch_end = min(batch_start + batch_size, len(valid_indices))
+                batch_indices = valid_indices[batch_start:batch_end]
+                batch_texts = [texts[i] for i in batch_indices]
+                batch_valid_images = [valid_images[valid_indices.index(i)] for i in batch_indices]
+                
+                # Process text using SigLIP processor
+                text_inputs = processor(text=batch_texts, return_tensors="pt", padding=True).to(device)
+                
+                # Process images using SigLIP processor
+                image_inputs = processor(images=batch_valid_images, return_tensors="pt").to(device)
+                
+                # Get embeddings
+                text_embeddings = model.get_text_features(**text_inputs)
+                image_embeddings = model.get_image_features(**image_inputs)
+                
+                # Normalize embeddings
+                text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+                image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
+                
+                # Compute similarities (dot product)
+                similarities = torch.sum(text_embeddings * image_embeddings, dim=-1)
+                
+                # Convert similarities to distances
+                batch_valid_distances = 1.0 - similarities.cpu().numpy()
+                
+                # Update distances for valid indices
+                for idx, valid_idx in enumerate(batch_indices):
+                    batch_distances[valid_idx] = batch_valid_distances[idx]
+                
+    # Return single value if both inputs were single items
+    if single_text and single_image and len(batch_distances) == 1:
+        return batch_distances[0]
+    
+    return batch_distances
+
 def clip_image_image_distances_batch(
     reference_images: Union[Image.Image, List[Image.Image]], 
     query_images: Union[Image.Image, List[Image.Image]], 
