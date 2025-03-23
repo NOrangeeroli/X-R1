@@ -28,7 +28,7 @@ def get_siglip_model(model_name="google/siglip-base-patch16-224", device=None):
     Returns:
         tuple: (model, processor) for feature extraction
     """
-    from transformers import AutoProcessor, AutoModel
+    from transformers import AutoProcessor, AutoModel, AutoTokenizer
     
     # Get local process info
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
@@ -45,12 +45,13 @@ def get_siglip_model(model_name="google/siglip-base-patch16-224", device=None):
             # Load model and processor from Hugging Face
             processor = AutoProcessor.from_pretrained(model_name)
             model = AutoModel.from_pretrained(model_name).to(device).eval()
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
             
             # Freeze parameters to ensure we're only doing inference
             for param in model.parameters():
                 param.requires_grad = False
                 
-            _siglip_models[model_key] = (model, processor)
+            _siglip_models[model_key] = (model, processor, tokenizer)
             
         except Exception as e:
             raise ValueError(f"Error loading SigLIP model {model_name}: {e}")
@@ -351,7 +352,7 @@ def clip_text_image_distances_batch(texts: Union[str, List[str]], images: Union[
     Args:
         texts: Either a single text string or a list of text strings.
         images: Either a single PIL Image or a list of PIL Images.
-        batch_size: Maximum number of samples to process in one batch.
+        
     
     Returns:
         If both inputs are single items: a float representing the distance
@@ -469,9 +470,7 @@ def siglip_text_image_distances_batch(texts: Union[str, List[str]], images: Unio
     print(f"siglip_text_image_distance_batch: device: {device}")
     
     # Get model and processor
-    model, processor = get_siglip_model(model_name=model_name, device=device)
-    
-    distances = []
+    model, processor, tokenizer = get_siglip_model(model_name=model_name, device=device)
     
     # Keep track of None images
     valid_indices = []
@@ -490,39 +489,77 @@ def siglip_text_image_distances_batch(texts: Union[str, List[str]], images: Unio
             # Process text batch - only for valid indices
             valid_texts = [texts[i] for i in valid_indices]
             
-            # Process in smaller batches if needed (to prevent OOM errors)
-            batch_size = 32  # Adjust based on your GPU memory
             
-            for batch_start in range(0, len(valid_indices), batch_size):
-                batch_end = min(batch_start + batch_size, len(valid_indices))
-                batch_indices = valid_indices[batch_start:batch_end]
-                batch_texts = [texts[i] for i in batch_indices]
-                batch_valid_images = [valid_images[valid_indices.index(i)] for i in batch_indices]
+            # Process all text and images in one go - use the correct processor format
+            
+            text_inputs = tokenizer(
+                    valid_texts,
+                    padding="max_length",
+                    return_tensors="pt",
+                )
+            text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
+            image_inputs = processor(
+                    images=valid_images,
+                    return_tensors="pt",
+                )
+            image_inputs = {k: v.to(device) for k, v in image_inputs.items()}
+            
+            print("input_ids shape:", text_inputs.get("input_ids").shape)
+            print("input_ids dtype:", text_inputs.get("input_ids").dtype)
+            print("Model type:", type(model))
+
+            # print(valid_texts)
+            # print(text_inputs)
+            text_embeddings = model.get_text_features(**text_inputs)
+            image_embeddings = model.get_image_features(**image_inputs)
+            
+            # inputs = processor(
+            #         text=valid_texts,
+            #         images=valid_images,
+            #         return_tensors="pt",
+            #         padding="max_length",
+            #     ).to(device)
+            
+            # text_embeddings = model.get_text_features(
+            #     input_ids=inputs.input_ids,
+            #     attention_mask=inputs.attention_mask
+            #     )
                 
-                # Process text using SigLIP processor
-                text_inputs = processor(text=batch_texts, return_tensors="pt", padding=True).to(device)
+            # image_embeddings = model.get_image_features(
+            #     pixel_values=inputs.pixel_values
+            #     )
+            
+            # Normalize embeddings
+            text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+            image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
                 
-                # Process images using SigLIP processor
-                image_inputs = processor(images=batch_valid_images, return_tensors="pt").to(device)
-                
-                # Get embeddings
-                text_embeddings = model.get_text_features(**text_inputs)
-                image_embeddings = model.get_image_features(**image_inputs)
-                
-                # Normalize embeddings
-                text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
-                image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
-                
-                # Compute similarities (dot product)
-                similarities = torch.sum(text_embeddings * image_embeddings, dim=-1)
-                
-                # Convert similarities to distances
-                batch_valid_distances = 1.0 - similarities.cpu().numpy()
-                
-                # Update distances for valid indices
-                for idx, valid_idx in enumerate(batch_indices):
-                    batch_distances[valid_idx] = batch_valid_distances[idx]
-                
+            # inputs = processor(
+            #     text=valid_texts,
+            #     images=valid_images,
+            #     return_tensors="pt",
+            #     padding="max_length",
+            # ).to(device)
+            
+            # # Extract features
+            # outputs = model(**inputs)
+            # image_embeddings = outputs.image_embeds  # shape: [1, D]
+            # text_embeddings = outputs.text_embeds    # shape: [1, D]
+            
+            # # Normalize embeddings
+            # text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+            # image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
+            
+            # Compute similarities (dot product)
+            similarities = torch.sum(text_embeddings * image_embeddings, dim=-1)
+            
+            # Convert similarities to distances
+            valid_distances = 1.0 - similarities.cpu().numpy()
+            
+            # Update distances for valid indices
+            for idx, valid_idx in enumerate(valid_indices):
+                batch_distances[valid_idx] = valid_distances[idx]
+            
+           
     # Return single value if both inputs were single items
     if single_text and single_image and len(batch_distances) == 1:
         return batch_distances[0]

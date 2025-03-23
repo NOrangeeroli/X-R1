@@ -12,7 +12,8 @@ from .sgp_bench.dataset import SGPBenchDataset
 from .draw_svg.dataset import DrawSVGDataset
 from .simple_object.dataset import SimpleObjectDataset
 from .simple_relation.dataset import SimpleRelationDataset
-from .reward import Reward, SVGReward, SVGImageReward
+from .coco_image.dataset import COCOImageDataset
+from .reward import Reward, SVGReward, SVGImageReward, SVGRawImageReward
 
 # Registry for datasets
 DATASETS = {
@@ -26,7 +27,8 @@ DATASETS = {
     "sgp_bench":SGPBenchDataset,
     "draw_svg": DrawSVGDataset,
     "simple_object": SimpleObjectDataset,
-    "simple_relation": SimpleRelationDataset
+    "simple_relation": SimpleRelationDataset,
+    "coco_image": COCOImageDataset
     # Add more datasets here
 }
 
@@ -37,6 +39,7 @@ REWARDS = {
     "aime": Reward,
     "svg": SVGReward,
     "svg_image": SVGImageReward,
+    "svg_raw_image": SVGRawImageReward
 }
 
 
@@ -57,7 +60,7 @@ def get_dataset_class(dataset_name: str):
         dataset_name = "cifar"
     elif dataset_name == "uwunion/instruct_svg":
         dataset_name = "instruct_svg"
-    elif dataset_name == "sgp-bench/sit_55k":
+    elif dataset_name == "sgp-bench/sit_10k":
         dataset_name = "sgp_bench"
     elif dataset_name == "achang/draw_svg":
         dataset_name = "draw_svg"
@@ -65,6 +68,8 @@ def get_dataset_class(dataset_name: str):
         dataset_name = "simple_object"
     elif dataset_name == "simple_relation":
         dataset_name =  "simple_relation"
+    elif dataset_name == "HuggingFaceM4/COCO":
+        dataset_name = "coco_image"
         
         
     if dataset_name not in DATASETS:
@@ -88,14 +93,16 @@ def get_reward_class(reward_name: str) -> Type[Any]:
     elif reward_name == "uwunion/instruct_svg":
         reward_name = "svg"
         
-    elif reward_name == "sgp-bench/sit_55k":
-        reward_name = "svg_image"
+    elif reward_name == "sgp-bench/sit_10k":
+        reward_name = "svg"
     elif reward_name == "achang/draw_svg":
         reward_name = "svg"
     elif reward_name == "simple_object":
         reward_name = "svg"
     elif reward_name == "simple_relation":
         reward_name = "svg"
+    elif reward_name == "HuggingFaceM4/COCO":
+        reward_name = "svg_raw_image"
     if reward_name not in REWARDS:
         raise ValueError(f"Reward {reward_name} not found. Available rewards: {list(REWARDS.keys())}")
     return REWARDS[reward_name]

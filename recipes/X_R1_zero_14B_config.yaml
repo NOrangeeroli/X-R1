@@ -3,7 +3,7 @@
 # running time ~32h
 
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-32B
+model_name_or_path: Qwen/Qwen2.5-14B
 # model_name_or_path: 5handilya/qwen2.5coder7b-svg
 model_revision: main
 torch_dtype: bfloat16
@@ -30,8 +30,8 @@ max_test_samples: 5
 epsilon: 0.02
 wandb_project: "X-R1-SGP"
 use_vllm: true
-output_dir: output/X-R1-32B
-gradient_accumulation_steps: 16
+output_dir: output/X-R1-14B
+gradient_accumulation_steps: 8
 max_prompt_length: 256
 num_generations: 7
 temperature: 0.7
@@ -63,8 +63,8 @@ lr_scheduler_type: cosine
 max_steps: -1
 num_train_epochs: 10
 overwrite_output_dir: true
-per_device_eval_batch_size: 2
-per_device_train_batch_size: 2
+per_device_eval_batch_size: 4
+per_device_train_batch_size: 4
 push_to_hub: False
 report_to:
 - wandb

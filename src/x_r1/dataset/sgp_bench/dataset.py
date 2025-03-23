@@ -53,13 +53,15 @@ class SGPBenchDataset:
         """
         Process a single example from the dataset
         """
+        desc = example["output"].split(".")[0] + '.'
        
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['output']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {desc}"},
             ],
-            "solution": example["input"],
+            "solution": desc,
+            "svg": example["input"],
         }
             
    
