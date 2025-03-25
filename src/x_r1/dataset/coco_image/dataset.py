@@ -8,10 +8,7 @@ import pandas as pd
 from PIL import Image
 
 SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-    "<think> reasoning process here </think>\n<answer> answer here </answer>"
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it.  The Assistant communicates in speaking mode by default but switches to thinking mode when deeper processing is needed. Wrap the thinking process in <!-- -->, while all content outside remains in speaking mode."
 )
 
 class COCOImageDataset:

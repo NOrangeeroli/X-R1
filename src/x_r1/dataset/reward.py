@@ -370,23 +370,26 @@ class SVGRawImageReward:
         
         
         # Check if the overall structure is correct
-        structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
+        # structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
         
         # Count occurrences of each tag
-        think_open_count = content.count("<think>")
-        think_close_count = content.count("</think>")
-        answer_open_count = content.count("<answer>")
-        answer_close_count = content.count("</answer>")
+        # think_open_count = content.count("<think>")
+        # think_close_count = content.count("</think>")
+        # answer_open_count = content.count("<answer>")
+        # answer_close_count = content.count("</answer>")
         
         # Check if exactly one of each tag exists
-        tags_valid = (think_open_count == 1 and 
-                    think_close_count == 1 and 
-                    answer_open_count == 1 and 
-                    answer_close_count == 1)
+        # tags_valid = (
+            # think_open_count == 1 and 
+            #         think_close_count == 1 and 
+            #         answer_open_count == 1 and 
+            #         answer_close_count == 1)
         no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
         
-        reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
+        reward = 0.5 if (
+            # structure_match and tags_valid and 
+            no_text) else 0.0
         # reward = 0.5 if no_text else 0.0
         
         
