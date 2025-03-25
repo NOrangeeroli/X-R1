@@ -21,7 +21,7 @@ dataset_name: HuggingFaceM4/COCO
 dataset_configs:
 - train
 num_processes: 7
-max_train_samples: -1
+max_train_samples: 10000
 max_test_samples: 100
 # dataset_test_split: validation
 # dataset_test_split: test
@@ -43,11 +43,11 @@ temperature_schedule:
   steps: [[1, 0.7]] 
 advantage_offset: 0.0
 logp_variance_reg_coef: 0.0
-max_completion_length: 1024
+max_completion_length: 2048
 
 bf16: true
 vllm_device: auto
-vllm_gpu_memory_utilization: 0.5
+vllm_gpu_memory_utilization: 0.7
 do_eval: false
 eval_strategy: "steps"
 eval_steps: 30

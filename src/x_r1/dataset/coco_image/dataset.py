@@ -47,9 +47,13 @@ class COCOImageDataset:
         if max_test_samples > 0:
             val_dataset = val_dataset.select(range(min(max_test_samples, len(val_dataset))))
         
-        # Apply processing with direct image loading
-        train_dataset = train_dataset.map(COCOImageDataset.process_example, num_proc=12)
-        val_dataset = val_dataset.map(COCOImageDataset.process_example, num_proc=12)
+        # Apply basic processing WITHOUT loading images
+        train_dataset = train_dataset.map(COCOImageDataset.process_example_metadata)
+        val_dataset = val_dataset.map(COCOImageDataset.process_example_metadata)
+        
+        # Set load_image function as format
+        train_dataset.set_transform(COCOImageDataset.load_image_transform)
+        val_dataset.set_transform(COCOImageDataset.load_image_transform)
         
         # Combine into DatasetDict
         return DatasetDict({
@@ -89,23 +93,36 @@ class COCOImageDataset:
         return Dataset.from_pandas(df)
     
     @staticmethod
-    def process_example(example: Dict[str, Any]) -> Dict[str, Any]:
+    def process_example_metadata(example: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process a single example from the dataset and load the image directly
+        Process metadata only (no image loading)
         """
-        # Load the image
-        try:
-            image = Image.open(example['image_path']).convert('RGB')
-        except Exception as e:
-            print(f"Error loading image {example['image_path']}: {e}")
-            image = None  # Return None if image can't be loaded
-            
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['sentences']['raw']}"},
             ],
             "solution": example["sentences"]["raw"],
-            "image": image,  # Include the loaded PIL image directly
-            "image_id": example["image_id"]  # Include image ID for reference
+            "image_path": example["image_path"],  # Keep path for later loading
+            "image_id": example["image_id"]
         }
+    
+    @staticmethod
+    def load_image_transform(examples: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Load image on-demand during dataset access
+        """
+        images = []
+    
+        # Process each image path
+        for path in examples['image_path']:
+            try:
+                image = Image.open(path).convert('RGB')
+                images.append(image)
+            except Exception as e:
+                print(f"Error loading image {path}: {e}")
+                images.append(None)
+        
+        # Add the images to the examples dictionary
+        examples['image'] = images
+        return examples
