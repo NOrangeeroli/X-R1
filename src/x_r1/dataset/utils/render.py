@@ -1,6 +1,6 @@
 from ..reward import SVGReward
 extract_svg = SVGReward.extract_svg
-from .clips import svg_to_image
+from .clips import svg_to_image, safe_svg_to_image
 
 def render_svg_from_text(text):
     """
@@ -23,7 +23,7 @@ def render_svg_from_text(text):
             return None
         
         # Convert SVG code to image
-        image = svg_to_image(svg_code)
+        image = safe_svg_to_image(svg_code)
         
         return image
     except Exception as e:

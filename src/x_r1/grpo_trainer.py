@@ -684,16 +684,52 @@ class GRPOTrainer(Trainer):
             # This must be done after loading weights to ensure they correspond to the merged state.
             if is_peft_model(unwrapped_model):
                 unwrapped_model.unmerge_adapter()
-
+    
+    def safe_gather(self, tensor, timeout=30):
+        """Safely gather tensors with timeout and fallback."""
+        try:
+            # First synchronize to ensure all processes are ready
+            torch.cuda.synchronize()
+            
+            # Signal readiness to prevent deadlocks
+            ready_tensor = torch.ones(1, device=self.accelerator.device)
+            self.accelerator.gather(ready_tensor)
+            
+            # Now perform the actual gather operation
+            return gather(tensor)
+        except Exception as e:
+            print(f"Process {self.accelerator.process_index}: Gather failed: {str(e)}")
+            # Return local tensor as fallback
+            return tensor
     def _prepare_inputs(self, inputs: dict[str, Union[torch.Tensor, Any]]) -> dict[str, Union[torch.Tensor, Any]]:
         
        
         inputs = self._generate_and_score_completions(inputs)
         return inputs
-
+    # Add this function near the top of your class
+    def debug_print(self, message):
+        """Print debug information with rank information."""
+        import datetime
+        import torch
+        
+        rank = self.accelerator.process_index
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        global_rank = int(os.environ.get("RANK", "0"))
+        device = f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu"
+        
+        # Get GPU memory usage if on CUDA
+        mem_info = ""
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated(device) / (1024**3)  # GB
+            reserved = torch.cuda.memory_reserved(device) / (1024**3)    # GB
+            mem_info = f", Memory: {allocated:.2f}GB/{reserved:.2f}GB"
+        
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        print(f"[{timestamp}] Rank {rank}/{global_rank} (GPU {local_rank}){mem_info}: {message}")
     def _generate_and_score_completions(
         self, inputs: dict[str, Union[torch.Tensor, Any]]
     ) -> dict[str, Union[torch.Tensor, Any]]:
+        # self.debug_print("Generating completions")
         device = self.accelerator.device
         prompts = [x["prompt"] for x in inputs]
         prompts_text = [maybe_apply_chat_template(example, self.processing_class)["prompt"] for example in inputs]
@@ -754,7 +790,7 @@ class GRPOTrainer(Trainer):
             prompt_length = prompt_ids.size(1)
             prompt_ids = prompt_completion_ids[:, :prompt_length]
             completion_ids = prompt_completion_ids[:, prompt_length:]
-
+        # self.debug_print("Finished completions")
         # Mask everything after the first EOS token
         is_eos = completion_ids == self.processing_class.eos_token_id
         eos_idx = torch.full((is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device)
@@ -766,7 +802,7 @@ class GRPOTrainer(Trainer):
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
 
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
-
+        # self.debug_print("Start logp computation")
         with torch.inference_mode():
             # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's
             # computation here, and use per_token_logps.detach() instead.
@@ -789,13 +825,13 @@ class GRPOTrainer(Trainer):
                         self.model, prompt_completion_ids, attention_mask, logits_to_keep
                     )
             assert  self.beta != 0.0   
-            completion_hidden_states = self._get_completion_hidden_states(
-                self.ref_model, 
-                prompt_completion_ids,
-                attention_mask,
-                logits_to_keep
-            )    
-            
+            # completion_hidden_states = self._get_completion_hidden_states(
+            #     self.ref_model, 
+            #     prompt_completion_ids,
+            #     attention_mask,
+            #     logits_to_keep
+            # )    
+        # self.debug_print("finished logp computation")
 
         # Decode the generated completions
         completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
@@ -835,13 +871,19 @@ class GRPOTrainer(Trainer):
                     rewards_per_func[:, i] = reward_func(**reward_inputs).logits[:, 0]  # Shape (B*G,)
             else:
                 # Repeat all input columns (but "prompt" and "completion") to match the number of generations
+                
                 keys = [key for key in inputs[0] if key not in ["prompt", "completion"]]
                 reward_kwargs = {key: [example[key] for example in inputs] for key in keys}
+                # self.debug_print(f"Start reward{i} computation")
                 output_reward_func = reward_func(prompts=prompts, completions=completions, **reward_kwargs)
+                # self.debug_print(f"Finished reward{i} computation")
                 rewards_per_func[:, i] = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
-
+                
+                
+        # self.debug_print("Finished reward computation")
         # Gather the reward per function: this part is crucial, because the rewards are normalized per group and the
         # completions may be distributed across processes
+        # torch.cuda.synchronize()
         rewards_per_func = gather(rewards_per_func)
 
         # Apply weights to each reward function's output and sum
@@ -948,7 +990,7 @@ class GRPOTrainer(Trainer):
             "ref_per_token_logps": ref_per_token_logps,
             "advantages": advantages,
             "rewards": rewards,
-            "completion_hidden_states": completion_hidden_states,
+            # "completion_hidden_states": completion_hidden_states,
         }
 
     def log_diversity_metrics(self, hidden_states, advantages):
@@ -1093,8 +1135,8 @@ class GRPOTrainer(Trainer):
         self._metrics["entropy"].append(entropy.item())
         
         
-        hidden_states = inputs["completion_hidden_states"]
-        self.log_diversity_metrics(self.accelerator.gather_for_metrics(hidden_states), self.accelerator.gather_for_metrics(inputs["rewards"]))
+        # hidden_states = inputs["completion_hidden_states"]
+        # self.log_diversity_metrics(self.accelerator.gather_for_metrics(hidden_states), self.accelerator.gather_for_metrics(inputs["rewards"]))
         
 
         if self.beta != 0.0:

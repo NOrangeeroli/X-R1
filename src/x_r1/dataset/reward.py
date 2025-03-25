@@ -4,7 +4,29 @@ import os
 from openai import OpenAI
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
+# Add this at the top of the file with other imports
+import os
+import torch
+import datetime
+import time
 
+# Add this utility function for debug printing
+def debug_print(message):
+    """Print debug information with rank information."""
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    global_rank = int(os.environ.get("RANK", "0"))
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    
+    # Get GPU memory info if using CUDA
+    mem_info = ""
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{local_rank}")
+        allocated = torch.cuda.memory_allocated(device) / (1024**3)  # GB
+        reserved = torch.cuda.memory_reserved(device) / (1024**3)    # GB
+        mem_info = f", Memory: {allocated:.2f}GB/{reserved:.2f}GB"
+    
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"[{timestamp}] Reward Rank {global_rank}/{local_rank} ({world_size}){mem_info}: {message}")
 class Reward:
     """Reward functions for the XDG dataset"""
     
@@ -140,7 +162,7 @@ class Reward:
         return rewards
     
     
-from .utils.clips import svg_to_image, clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch,siglip_text_image_distances_batch
+from .utils.clips import  safe_svg_to_image,clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch,siglip_text_image_distances_batch
 
 class SVGReward:
     @staticmethod
@@ -220,7 +242,7 @@ class SVGReward:
         completion_contents = [completion[0]["content"] for completion in completions]
         ans = [SVGReward.extract_svg(content) for content in completion_contents]
         rewards = []
-        images = [svg_to_image(content) for content in ans]
+        images = [safe_svg_to_image(content) for content in ans]
         
         distances = clip_text_image_distances_batch(solution, images)
         rewards = [1.0 - distance for distance in distances]
@@ -234,8 +256,8 @@ class SVGReward:
         ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
         ans_ref = [SVGImageReward.extract_svg(content) for content in svg]
         rewards = []
-        images = [svg_to_image(content) for content in ans]
-        ref_images = [svg_to_image(content) for content in ans_ref]
+        images = [safe_svg_to_image(content) for content in ans]
+        ref_images = [safe_svg_to_image(content) for content in ans_ref]
         
         distances = dinov2_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
@@ -320,8 +342,8 @@ class SVGImageReward:
         ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
         ans_ref = [SVGImageReward.extract_svg(content) for content in solution]
         rewards = []
-        images = [svg_to_image(content) for content in ans]
-        ref_images = [svg_to_image(content) for content in ans_ref]
+        images = [safe_svg_to_image(content) for content in ans]
+        ref_images = [safe_svg_to_image(content) for content in ans_ref]
         
         distances = vgg_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
@@ -401,14 +423,16 @@ class SVGRawImageReward:
     @staticmethod
     def accuracy_reward(completions, solution, **kwargs):
         
-        
+        # debug_print("start accuracy_reward")
         
         completion_contents = [completion[0]["content"] for completion in completions]
         ans = [SVGReward.extract_svg(content) for content in completion_contents]
         rewards = []
-        images = [svg_to_image(content) for content in ans]
-        
+        # debug_print(ans)
+        images = [safe_svg_to_image(content) for content in ans]
+        # debug_print("start accuracy_reward distances")
         distances = clip_text_image_distances_batch(solution, images)
+        # debug_print("finished accuracy_reward distances")
         rewards = [1.0 - distance for distance in distances]
         return rewards
     @staticmethod
@@ -420,7 +444,7 @@ class SVGRawImageReward:
         ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
         
         rewards = []
-        images = [svg_to_image(content) for content in ans]
+        images = [safe_svg_to_image(content) for content in ans]
         ref_images = image
         
         distances = dinov2_image_image_distances_batch(ref_images, images)
