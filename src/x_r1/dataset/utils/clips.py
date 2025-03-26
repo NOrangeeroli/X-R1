@@ -11,11 +11,10 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from typing import Union, List
-
-# Cache for SigLIP models
+from func_timeout import func_timeout, FunctionTimedOut, func_set_timeout# Cache for SigLIP models
 _siglip_models = {}
 
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=300)
 def get_siglip_model(model_name="google/siglip-base-patch16-224", device=None):
     """Get SigLIP model in a distributed-friendly way
     
@@ -61,7 +60,7 @@ def get_siglip_model(model_name="google/siglip-base-patch16-224", device=None):
 # Cache for MAE models
 _mae_models = {}
 
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=300)
 def get_mae_model(model_name="mae_vit_base_patch16", device=None):
     """Get MAE (Masked Autoencoder) model in a distributed-friendly way
     
@@ -115,7 +114,7 @@ def get_mae_model(model_name="mae_vit_base_patch16", device=None):
 # Cache for DinoV2 models
 _dinov2_models = {}
 
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=300)
 def get_dinov2_model(model_name="dinov2_vits14", device=None):
     """Get DinoV2 model in a distributed-friendly way
     
@@ -159,7 +158,7 @@ def get_dinov2_model(model_name="dinov2_vits14", device=None):
 
 # Load CLIP model
 _clip_models = {}
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=300)
 def get_clip_model(model_name="ViT-B/32", device=None):
     """Get CLIP model in a distributed-friendly way"""
     # Get local process info
@@ -184,7 +183,7 @@ def get_clip_model(model_name="ViT-B/32", device=None):
 # Cache for VGG models
 _vgg_models = {}
 
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=300)
 def get_vgg_model(model_name="vgg19", layer_index=8, device=None):
     """Get VGG model in a distributed-friendly way
     
@@ -226,12 +225,33 @@ def get_vgg_model(model_name="vgg19", layer_index=8, device=None):
     
     return _vgg_models[model_key]
 
-# device_id = 0  # Use the first GPU
-# # device = f"cuda:{device_id}" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
-# # model, preprocess = clip.load("ViT-B/32", device=device)
-# model, preprocess = clip.load("ViT-L/14", device=device)
 
+
+def safe_svg_to_image(svg_code, timeout=5):
+    """Convert SVG to image with timeout protection."""
+    # Get process info for debugging
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    global_rank = int(os.environ.get("RANK", "0"))
+    
+    
+    # Skip empty SVG
+    if not svg_code :
+        print(f"[Rank {global_rank}/{local_rank}] Empty SVG")
+        return None
+    
+    try:
+        
+        result = svg_to_image(svg_code)
+        return result
+    except FunctionTimedOut:
+        
+        print(f"[Rank {global_rank}/{local_rank}] SVG to image conversion timed out")
+        print(f"The SVG code is: {svg_code}")
+        return None
+    except Exception as e:
+        print(f"[Rank {global_rank}/{local_rank}] Error in svg_to_image: {type(e).__name__}: {str(e)}")
+        return None
+@func_set_timeout(3)
 def svg_to_image(svg_code):
     """
     Attempts to parse and recover from errors in SVG code,
@@ -243,15 +263,17 @@ def svg_to_image(svg_code):
     """
     # Create an XML parser in recovery mode. This tells lxml
     # to try to recover as much as possible from broken XML.
+    
     try:
         parser = etree.XMLParser(recover=True)
         
         
-        tree = etree.fromstring(svg_code.encode('utf-8'), parser)
         
+        tree = etree.fromstring(svg_code.encode('utf-8'), parser)
         valid_svg = etree.tostring(tree)
         
         
+        # doitReturnValue = func_timeout(5, cairosvg.svg2png, args=(valid_svg,))
         png_data = cairosvg.svg2png(bytestring=valid_svg)
         image = Image.open(BytesIO(png_data))
         return image
@@ -954,82 +976,12 @@ def dinov2_image_image_distances_batch(
 
 
 if __name__ == "__main__":
-    svg_code = """<!-- To create an SVG for a clipboard icon that could represent a medical file, I'll design a simple version with a black and white fill. The clipboard will consist of a rectangle and two overlapping triangles on top. -->
-<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-<rect x="20" y="40" width="60" height="20" fill="black"/>
-<polygon points="50,30 80,70 20,70" fill="white"/>
-<polygon points="50,30 80,70 20,70" fill="black" opacity="0.5"/>
-</svg>"""
-    svg_code_ref = """
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
-<g>
-	<polygon style="fill:#F4B2B0;" points="97.409,61.893 255.999,61.893 149.583,193.179 	"/>
-	<polygon style="fill:#F4B2B0;" points="414.589,61.893 255.999,61.893 362.415,193.179 	"/>
-	<polygon style="fill:#F4B2B0;" points="146.993,194.664 255.999,446.434 365.006,194.664 	"/>
-</g>
-<path style="fill:#B3404A;" d="M511.985,194.034c0.017-2.515-0.654-5.029-2.054-7.225L425.782,54.76
-	c-0.038-0.061-0.085-0.114-0.123-0.174c-0.032-0.048-0.054-0.1-0.086-0.146c-0.066-0.098-0.147-0.183-0.216-0.279
-	c-0.202-0.281-0.411-0.555-0.63-0.816c-0.107-0.127-0.216-0.252-0.329-0.376c-0.249-0.275-0.508-0.535-0.776-0.784
-	c-0.096-0.089-0.187-0.181-0.284-0.265c-0.76-0.668-1.585-1.24-2.458-1.708c-0.1-0.053-0.202-0.098-0.303-0.149
-	c-0.337-0.17-0.681-0.328-1.03-0.468c-0.147-0.06-0.296-0.114-0.445-0.169c-0.328-0.118-0.66-0.222-0.995-0.315
-	c-0.146-0.04-0.292-0.084-0.439-0.119c-0.472-0.113-0.948-0.206-1.429-0.267c-0.005,0-0.009-0.001-0.015-0.003
-	c-0.502-0.062-1.007-0.089-1.514-0.093c-0.04,0-0.078-0.007-0.118-0.007H255.999H97.409c-4.398,0-8.511,2.179-10.981,5.818
-	c-2.47,3.64-2.977,8.267-1.352,12.355l45.255,113.875H37.457l29.313-46.001c3.939-6.182,2.122-14.385-4.06-18.324
-	c-6.182-3.939-14.384-2.123-18.324,4.06L2.069,186.81c-1.403,2.2-2.074,4.717-2.054,7.236c-0.162,3.486,1.033,7.031,3.626,9.761
-	l242.738,255.441c0.072,0.076,0.151,0.139,0.224,0.212c0.077,0.077,0.145,0.161,0.223,0.236c0.098,0.093,0.203,0.173,0.303,0.263
-	c0.161,0.145,0.321,0.287,0.487,0.422c0.183,0.15,0.37,0.291,0.559,0.429c0.17,0.125,0.34,0.248,0.515,0.364
-	c0.199,0.131,0.402,0.252,0.605,0.372c0.173,0.101,0.344,0.204,0.52,0.297c0.218,0.115,0.441,0.218,0.664,0.32
-	c0.17,0.078,0.338,0.159,0.511,0.23c0.24,0.098,0.484,0.18,0.729,0.264c0.162,0.056,0.322,0.117,0.487,0.165
-	c0.265,0.08,0.535,0.141,0.804,0.203c0.147,0.035,0.293,0.076,0.443,0.105c0.301,0.058,0.604,0.098,0.908,0.135
-	c0.121,0.015,0.242,0.038,0.362,0.05c0.425,0.041,0.851,0.064,1.277,0.064h0.001h0.001c0.425,0,0.849-0.023,1.273-0.062
-	c0.119-0.012,0.239-0.036,0.358-0.05c0.303-0.037,0.605-0.076,0.905-0.134c0.15-0.029,0.297-0.07,0.446-0.105
-	c0.267-0.061,0.534-0.122,0.796-0.2c0.165-0.049,0.326-0.11,0.488-0.165c0.242-0.082,0.483-0.163,0.721-0.26
-	c0.174-0.07,0.344-0.153,0.515-0.23c0.22-0.101,0.439-0.2,0.656-0.315c0.178-0.093,0.35-0.196,0.524-0.297
-	c0.202-0.118,0.402-0.236,0.6-0.366c0.175-0.115,0.345-0.239,0.515-0.362c0.188-0.137,0.374-0.276,0.557-0.425
-	c0.165-0.134,0.324-0.273,0.483-0.415c0.1-0.089,0.206-0.169,0.304-0.261c0.08-0.076,0.149-0.159,0.226-0.238
-	c0.073-0.073,0.151-0.135,0.223-0.21l122.146-127.72c5.066-5.297,4.879-13.698-0.418-18.765c-5.298-5.067-13.699-4.877-18.765,0.418
-	l-73.842,77.211l79.323-183.21h94.601l-36.481,38.638c-5.033,5.33-4.791,13.73,0.539,18.761c2.564,2.422,5.84,3.622,9.108,3.622
-	c3.525,0,7.042-1.395,9.653-4.161l56.933-60.299C510.965,201.045,512.15,197.509,511.985,194.034z M255.999,83.044l78.675,97.626
-	h-157.35L255.999,83.044z M137.964,207.214l79.065,182.616L43.495,207.214H137.964z M417.34,90.907l57.203,89.764h-92.875
-	L417.34,90.907z M395.033,75.165l-36.581,92.048l-74.611-92.048H395.033z M228.158,75.165l-74.611,92.048l-36.581-92.048H228.158z
-	 M255.999,413.03l-88.797-205.094h177.595L255.999,413.03z"/>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-</svg>
-"""
+    svg_codes = ['<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">\n  <!-- Walls -->\n  <rect x="50" y="50" width="300" height="300" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <rect x="100" y="100" width="200" height="200" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  \n  <!-- Floor -->\n  <rect x="50" y="350" width="300" height="50" fill="#e0e0e0" stroke="#000" stroke-width="2" />\n  \n  <!-- Window -->\n  <rect x="100" y="100" width="100" height="100" fill="#ffffff" stroke="#000" stroke-width="2" />\n  <rect x="110" y="110" width="80" height="80" fill="#ffffff" stroke="#000" stroke-width="2" />\n  <rect x="110" y="110" width="80" height="80" fill="#ffffff" stroke="#000" stroke-width="2" />\n  \n  <!-- Sink -->\n  <ellipse cx="200" cy="250" rx="50" ry="20" fill="#ffffff" stroke="#000" stroke-width="2" />\n  <ellipse cx="200" cy="250" rx="40" ry="10" fill="#ffffff" stroke="#000" stroke-width="2" />\n  \n  <!-- Counter -->\n  <rect x="50" y="200" width="300" height="50" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <rect x="50" y="200" width="300" height="20" fill="#e0e0e0" stroke="#000" stroke-width="2" />\n  \n  <!-- Appliances -->\n  <rect x="100" y="300" width="100" height="100" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <rect x="200" y="100" width="100" height="100" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <ellipse cx="250" cy="150" rx="50" ry="20" fill="#ffffff" stroke="#000" stroke-width="2" />\n  \n  <!-- Light -->\n  <circle cx="200" cy="100" r="10" fill="#ffffff" stroke="#000" stroke-width="2" />\n  <circle cx="200" cy="100" r="5" fill="#000" />\n  \n  <!-- Washing Machine -->\n  <rect x="200" y="300" width="100" height="100" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <rect x="210" y="310" width="80" height="80" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  <rect x="210" y="310" width="80" height="80" fill="#f0f0f0" stroke="#000" stroke-width="2" />\n  \n  <!-- Light Bulb -->\n  <circle cx="200" cy="100" r="10" fill="#ffffff" stroke="#000" stroke-width="2" />\n  <circle cx="200" cy="100" r="5" fill="#000" />\n</svg>', '<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">\n  <!-- Background color for the sky -->\n  <rect x="0" y="0" width="600" height="200" fill="#87CEEB" />\n  \n  <!-- Streets -->\n  <path d="M0,200 Q 100,250 200,200 Q 300,150 400,200 Q 500,250 600,200" stroke="#696969" stroke-width="5" fill="none" />\n  \n  <!-- Parade elements -->\n  <path d="M100,250 C 150,240 200,230 250,240 C 300,250 350,260 400,250 C 450,240 500,230 550,240" stroke="#FFD700" stroke-width="10" fill="#FFD700" />\n  <path d="M200,260 C 210,270 220,280 230,290 C 240,300 250,310 260,320" stroke="#FFD700" stroke-width="10" fill="#FFD700" />\n  \n  <!-- People -->\n  <rect x="100" y="280" width="50" height="100" fill="tan" />\n  <rect x="200" y="280" width="50" height="100" fill="tan" />\n  <rect x="300" y="280" width="50" height="100" fill="tan" />\n  <rect x="400" y="280" width="50" height="100" fill="tan" />\n  \n  <!-- Flags -->\n  <polygon points="100,250 150,240 200,250" fill="red" stroke="black" />\n  <polygon points="200,250 250,240 300,250" fill="blue" stroke="black" />\n  \n  <!-- Balloons -->\n  <ellipse cx="150" cy="300" rx="50" ry="20" fill="green" />\n  <ellipse cx="350" cy="300" rx="50" ry="20" fill="yellow" />\n  \n  <!-- Decorations -->\n  <circle cx="100" cy="270" r="10" fill="red" />\n  <circle cx="400" cy="270" r="10" fill="blue" />\n</svg>', '<svg width="500" height="300" xmlns="http://www.w3.org/2000/svg">\n  <!-- Street -->\n  <rect x="50" y="200" width="400" height="50" fill="lightgray" stroke="black" stroke-width="2" />\n  \n  <!-- Parade Path -->\n  <path d="M100,250 C150,200 200,150 250,200 C300,150 350,200 400,250" fill="none" stroke="red" stroke-width="10" />\n  \n  <!-- People -->\n  <rect x="100" y="200" width="50" height="100" fill="lightblue" stroke="black" stroke-width="2" />\n  <circle cx="120" cy="260" r="20" fill="blue" />\n  <rect x="200" y="200" width="50" height="100" fill="lightblue" stroke="black" stroke-width="2" />\n  <circle cx="220" cy="260" r="20" fill="blue" />\n  <rect x="300" y="200" width="50" height="100" fill="lightblue" stroke="black" stroke-width="2" />\n  <circle cx="320" cy="260" r="20" fill="blue" />\n  <rect x="400" y="200" width="50" height="100" fill="lightblue" stroke="black" stroke-width="2" />\n  <circle cx="420" cy="260" r="20" fill="blue" />\n  \n  <!-- Street Details -->\n  <rect x="50" y="250" width="100" height="10" fill="black" stroke="black" stroke-width="2" />\n  <rect x="400" y="250" width="100" height="10" fill="black" stroke="black" stroke-width="2" />\n  \n  <!-- Parade Details -->\n  <path d="M150,200 C200,150 250,200 C300,150 350,200" fill="none" stroke="red" stroke-width="10"/>\n  <path d="M200,200 C220,180 240,200 C260,220 280,200" fill="none" stroke="red" stroke-width="10" />\n</svg>', '<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">\n  <!-- Background -->\n  <rect width="100%" height="100%" fill="#f0f0f0" />\n\n  <!-- Parade Route -->\n  <path d="M50,100 C100,150 200,100 300,150" stroke="#000" stroke-width="5" fill-opacity="0.5" />\n  \n  <!-- People -->\n  <g fill="rgba(255,255,255,0.8)">\n    <ellipse cx="100" cy="200" rx="30" ry="10" fill="#ffffff" stroke="#b6b698"/>\n    <g>\n      <path class="st0" d="M298873294L843995283H8"></path>\n      <ellipse class="st2" fill-rule="evenodd" fill="#FEFEFE" opacity="1"/>\n      <circle opacity="1"></circle>\n    </g>\n  </g>\n  \n  <!-- Flags -->\n  <g stroke-miterlimit="4">\n    <polygon fill="#FF5234" opacity=".6">\n      <path d="M677596H921v3l395v3H0v3C-5 3-4C5v3C899M39H71">\n        <stroke opacity=".5"/><path d="-69"/>\n        <stroke opacity=".5"/><path d="-9"/>\n      </path>\n    </polygon>\n  </g>\n  \n  <!-- Balloons -->\n  <g>\n    <ellipse stroke="#F6E0D3"></ellipse>\n  </g>\n  \n  <!-- Parade Floats -->\n  <!-- Add more details like floats, balloons, and flags as needed -->\n</svg>']
 
     # Convert SVG to image
-    image = svg_to_image(svg_code)
-    image.save("test.png")
+    for i, svg_code in enumerate(svg_codes):
+        print(f"Processing SVG {i+1}")
+        print(safe_svg_to_image(svg_code))
     # image_ref = svg_to_image(svg_code_ref)
     # print(clip_image_image_pixel_distances_batch(image, image_ref))
     # image.show()  # Display the image

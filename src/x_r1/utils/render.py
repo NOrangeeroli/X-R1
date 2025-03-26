@@ -1,5 +1,5 @@
 from x_r1.dataset.reward import extract_svg
-from x_r1.dataset.utils.clips import svg_to_image
+from x_r1.dataset.utils.clips import svg_to_image, safe_svg_to_image
 
 def render_svg_from_text(text):
     """
@@ -22,7 +22,7 @@ def render_svg_from_text(text):
             return None
         
         # Convert SVG code to image
-        image = svg_to_image(svg_code)
+        image = safe_svg_to_image(svg_code)
         
         return image
     except Exception as e:
