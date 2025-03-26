@@ -11,8 +11,9 @@ attn_implementation: flash_attention_2
 
 # Data training arguments
 #dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
-# eval_dataset_name: HuggingFaceH4/aime_2024
-dataset_name: HuggingFaceM4/COCO 
+eval_dataset_name: HuggingFaceH4/aime_2024
+# dataset_name: HuggingFaceM4/COCO 
+dataset_name: SynthLabsAI/Big-Math-RL-Verified
 
 # dataset_name: simple_object
 # dataset_name: simple_relation
@@ -35,12 +36,12 @@ output_dir: output/X-R1-7B
 gradient_accumulation_steps: 8
 max_prompt_length: 256
 num_generations: 7
-temperature: 0.7
+temperature: 0.9
 top_p: 0.8
 temperature_schedule:
   type: "step"
-  start: 0.7
-  steps: [[1, 0.7]] 
+  start: 0.9
+  steps: [[1, 0.9]] 
 advantage_offset: 0.0
 logp_variance_reg_coef: 0.0
 max_completion_length: 2048
