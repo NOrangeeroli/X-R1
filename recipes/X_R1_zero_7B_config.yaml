@@ -22,7 +22,7 @@ dataset_name: SynthLabsAI/Big-Math-RL-Verified
 dataset_configs:
 - train
 num_processes: 7
-max_train_samples: 10000
+max_train_samples: 100000
 max_test_samples: 100
 # dataset_test_split: validation
 # dataset_test_split: test
@@ -37,7 +37,7 @@ gradient_accumulation_steps: 8
 max_prompt_length: 256
 num_generations: 7
 temperature: 0.9
-top_p: 0.8
+# top_p: 0.8
 temperature_schedule:
   type: "step"
   start: 0.9
@@ -73,4 +73,4 @@ report_to:
 save_strategy: "steps"
 save_steps: 30
 seed: 42
-warmup_ratio: 0.1
+warmup_ratio: 0.01
