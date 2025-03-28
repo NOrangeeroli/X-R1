@@ -13,6 +13,7 @@ from .draw_svg.dataset import DrawSVGDataset
 from .simple_object.dataset import SimpleObjectDataset
 from .simple_relation.dataset import SimpleRelationDataset
 from .coco_image.dataset import COCOImageDataset
+from .simplelr.dataset import SimplelrDataset
 from .reward import Reward, SVGReward, SVGImageReward, SVGRawImageReward
 
 # Registry for datasets
@@ -28,7 +29,8 @@ DATASETS = {
     "draw_svg": DrawSVGDataset,
     "simple_object": SimpleObjectDataset,
     "simple_relation": SimpleRelationDataset,
-    "coco_image": COCOImageDataset
+    "coco_image": COCOImageDataset,
+    "simplelr": SimplelrDataset
     # Add more datasets here
 }
 
@@ -37,6 +39,7 @@ REWARDS = {
     "bigmath": Reward,
     "math500": Reward,
     "aime": Reward,
+    "simplelr": Reward,
     "svg": SVGReward,
     "svg_image": SVGImageReward,
     "svg_raw_image": SVGRawImageReward
@@ -50,6 +53,8 @@ def get_dataset_class(dataset_name: str):
         dataset_name = "xdg"
     elif dataset_name == "SynthLabsAI/Big-Math-RL-Verified":
         dataset_name = "bigmath"
+    elif dataset_name == "simplelr":
+        dataset_name = "simplelr"
     elif dataset_name == "HuggingFaceH4/aime_2024":
         dataset_name = "aime"
     elif dataset_name == "HuggingFaceH4/math_500":
@@ -82,6 +87,8 @@ def get_reward_class(reward_name: str) -> Type[Any]:
         reward_name = "xdg"
     elif reward_name == "SynthLabsAI/Big-Math-RL-Verified":
         reward_name = "bigmath"
+    elif reward_name == "simplelr":
+        reward_name = "simplelr"
     elif reward_name == "HuggingFaceH4/aime_2024":
         reward_name = "aime"
     elif reward_name == "HuggingFaceH4/math_500":
