@@ -11,10 +11,12 @@ attn_implementation: flash_attention_2
 
 # Data training arguments
 #dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
-eval_dataset_name: HuggingFaceH4/aime_2024
-# dataset_name: HuggingFaceM4/COCO 
+# eval_dataset_name: HuggingFaceH4/aime_2024
+eval_dataset_name: uwunion/instruct_svg
+
+dataset_name: HuggingFaceM4/COCO 
 # dataset_name: SynthLabsAI/Big-Math-RL-Verified
-dataset_name: simplelr
+# dataset_name: simplelr
 
 # dataset_name: simple_object
 # dataset_name: simple_relation
@@ -35,19 +37,19 @@ wandb_project: "X-R1-math"
 use_vllm: true
 output_dir: output/X-R1-7B
 gradient_accumulation_steps: 16
-max_prompt_length: 1024
+max_prompt_length: 256
 num_generations: 7
 eval_num_generations: 7
-temperature: 1.0
-eval_temperature: 0.1
+temperature: 0.7
+eval_temperature: 0.7
 top_p: 1
 temperature_schedule:
   type: "step"
-  start: 1.0
-  steps: [[1, 1.0]] 
+  start: 0.7
+  steps: [[1, 0.7]] 
 advantage_offset: 0.0
 logp_variance_reg_coef: 0.0
-max_completion_length: 4096
+max_completion_length: 2048
 
 bf16: true
 vllm_device: auto
@@ -66,7 +68,7 @@ log_completions: true
 
 lr_scheduler_type: constant
 max_steps: -1
-num_train_epochs: 20
+num_train_epochs: 1
 overwrite_output_dir: true
 per_device_eval_batch_size: 2
 per_device_train_batch_size: 2
