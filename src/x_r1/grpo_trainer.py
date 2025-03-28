@@ -950,26 +950,26 @@ class GRPOTrainer(Trainer):
                 
                 
                     
-                    # images = []
-                    # for svg_code, caption  in zip(completions_to_log, solutions_to_log):
-                    #     try:
-                    #         # Try to render the SVG code to an image
-                    #         img = render_svg_from_text(svg_code)
-                    #         if img is not None:
-                    #             # Convert PIL image to wandb compatible format
-                    #             images.append(wandb.Image(img, caption=caption))
-                    #         else:
-                    #             # If rendering fails, use a placeholder
-                    #             placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
-                    #             images.append(wandb.Image(Image.fromarray(placeholder)))
-                    #     except Exception as e:
-                    #         print(f"Error rendering SVG: {str(e)[:100]}...")
-                    #         # Create a text-based placeholder image with error message
-                    #         placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
-                    #         images.append(wandb.Image(Image.fromarray(placeholder)))
+                    images = []
+                    for svg_code, caption  in zip(completions_to_log, solutions_to_log):
+                        try:
+                            # Try to render the SVG code to an image
+                            img = render_svg_from_text(svg_code)
+                            if img is not None:
+                                # Convert PIL image to wandb compatible format
+                                images.append(wandb.Image(img, caption=caption))
+                            else:
+                                # If rendering fails, use a placeholder
+                                placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
+                                images.append(wandb.Image(Image.fromarray(placeholder)))
+                        except Exception as e:
+                            print(f"Error rendering SVG: {str(e)[:100]}...")
+                            # Create a text-based placeholder image with error message
+                            placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
+                            images.append(wandb.Image(Image.fromarray(placeholder)))
                     
-                    # # Add images to the table
-                    # table["rendered_svg"] = images
+                    # Add images to the table
+                    table["rendered_svg"] = images
                             
                         
                         

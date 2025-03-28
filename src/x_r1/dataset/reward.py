@@ -450,6 +450,58 @@ class SVGRawImageReward:
         distances = dinov2_image_image_distances_batch(ref_images, images)
         rewards = [1.0 - distance for distance in distances]
         return rewards
+    @staticmethod
+    def is_grayscale(image, threshold=10):
+        """
+        Check if an image is grayscale (black and white).
+        
+        Args:
+            image: PIL Image object
+            threshold: Maximum allowed difference between RGB channels to still be considered grayscale
+            
+        Returns:
+            float: 1.0 if grayscale, 0.0 if colored
+        """
+        if image is None:
+            return 0.0
+            
+        # Convert to RGB if not already
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        
+        # Get image data as numpy array
+        import numpy as np
+        img_array = np.array(image)
+        
+        # Check if RGB channels are approximately equal
+        r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+        
+        # Calculate maximum difference between channels for each pixel
+        diff_rg = np.abs(r.astype(int) - g.astype(int))
+        diff_rb = np.abs(r.astype(int) - b.astype(int))
+        diff_gb = np.abs(g.astype(int) - b.astype(int))
+        
+        max_diff = np.maximum(np.maximum(diff_rg, diff_rb), diff_gb)
+        
+        # If more than 95% of pixels have channel differences below threshold,
+        # consider it grayscale
+        grayscale_percentage = (max_diff <= threshold).mean()
+        
+        return 1.0 if grayscale_percentage > 0.95 else 0.0
+
+    @staticmethod
+    def color_reward(completions, **kwargs):
+        """
+        Reward function that penalizes grayscale images.
+        Returns 0.0 for grayscale images, 1.0 for colored images.
+        """
+        completion_contents = [completion[0]["content"] for completion in completions]
+        svg_contents = [SVGRawImageReward.extract_svg(content) for content in completion_contents]
+        images = [safe_svg_to_image(content) for content in svg_contents]
+        
+        # Check if images are grayscale and penalize them
+        color_scores = [0.5 if SVGRawImageReward.is_grayscale(img) else 0 for img in images]
+        return color_scores
         
 
 
