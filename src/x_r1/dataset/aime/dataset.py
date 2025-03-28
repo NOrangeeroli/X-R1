@@ -18,6 +18,8 @@ class AIMEDataset:
     @staticmethod
     def load_dataset(
         dataset_name: str,
+        dataset_config: Optional[Dict[str, Any]] = None,
+        max_train_samples: Optional[int] = -1,
         max_test_samples: Optional[int] = -1,
         **kwargs
     ) -> Union[Dataset, IterableDataset]:
@@ -33,12 +35,20 @@ class AIMEDataset:
         
         
         # Apply filtering or selection if needed
-        dataset = dataset['train']
+        dataset['test'] = dataset['train']
+        
+        if max_train_samples and max_train_samples > 0:
+            for split in dataset:
+                if split == "train":
+                    dataset[split] = dataset[split].select(range(min(max_train_samples, len(dataset[split]))))
         
         if max_test_samples and max_test_samples > 0:       
-            
-            dataset = dataset.select(range(min(max_test_samples, len(dataset))))    
+            for split in dataset:
+                if split == "test":
+                    dataset[split] = dataset[split].select(range(min(max_test_samples, len(dataset[split]))))    
         return dataset
+        
+        
     
     @staticmethod
     def process_example(example: Dict[str, Any]) -> Dict[str, Any]:
