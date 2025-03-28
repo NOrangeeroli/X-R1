@@ -922,7 +922,8 @@ class GRPOTrainer(Trainer):
         self._metrics["reward_std"].append(std_grouped_rewards.mean().item())
         solutions = [x["solution"] for x in inputs]
         # print(len(solutions))
-        if self.log_completions and self.state.global_step % self.args.logging_steps == 0:
+        if self.log_completions and (self.state.global_step % self.args.logging_steps == 0 or "eval_" in getattr(self, "current_phase", "")):
+            is_eval = "eval_" in getattr(self, "current_phase", "")
             prompts_to_log = gather_object(prompts_text)
             completions_to_log = gather_object(completions_text)
             rewards_to_log = rewards.tolist()
@@ -933,13 +934,21 @@ class GRPOTrainer(Trainer):
                 if self.args.report_to and "wandb" in self.args.report_to and wandb.run is not None:
                     import pandas as pd
 
+                    prefix = "eval_" if is_eval else ""
+                    step_name = f"{prefix}completions/step_{str(self.state.global_step)}"
+                    
                     # For logging
                     table = {
-                        "step": [str(self.state.global_step)] * len(rewards),
+                        "step": [str(self.state.global_step)] * len(rewards_to_log),
                         "prompt": prompts_to_log,
                         "completion": completions_to_log,
-                        "reward": rewards.tolist(),
+                        "reward": rewards_to_log,
+                        "solution": solutions_to_log,
                     }
+
+            
+                
+                
                     
                     # images = []
                     # for svg_code, caption  in zip(completions_to_log, solutions_to_log):
@@ -966,7 +975,6 @@ class GRPOTrainer(Trainer):
                         
                     
                     # print(len(solutions_to_log), len(rewards.tolist()))
-                    table["solution"] = solutions_to_log
                     for i, reward_func in enumerate(self.reward_funcs):
                         if isinstance(reward_func, nn.Module):  # Module instead of PretrainedModel for compat with compiled models
                             reward_func_name = reward_func.config._name_or_path.split("/")[-1]
@@ -975,7 +983,7 @@ class GRPOTrainer(Trainer):
                         table[f"rewards/{reward_func_name}"] = rewards_per_func[:,i].tolist()
                         
                     df = pd.DataFrame(table)
-                    wandb.log({f"completions/step_{str(self.state.global_step)}": wandb.Table(dataframe=df)})
+                    wandb.log({f"{step_name}": wandb.Table(dataframe=df)})
         rewards = rewards[process_slice]
         
         if self.state.global_step % 5 == 0:
@@ -1387,11 +1395,13 @@ class GRPOTrainer(Trainer):
             #     print(f"Step {current_step}: Temperature is {new_temp:.4f}")
  
     def evaluation_loop(self, *args, **kwargs):
+        self.current_phase = "eval_"
         result = super().evaluation_loop(*args, **kwargs)
         # Clean up memory after evaluation
         if hasattr(self, "_buffered_inputs"):
             for i in range(len(self._buffered_inputs)):
                 self._buffered_inputs[i] = None
+        self.current_phase = ""
         torch.cuda.empty_cache()
         return result           
             
