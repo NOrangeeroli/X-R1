@@ -39,6 +39,10 @@ class GRPOConfig(trl.GRPOConfig):
             "help": "Temperature used for generation during evaluation. Lower values make outputs more deterministic."
         },
     )
+    eval_num_generations: int = field(
+        default=1,
+        metadata={"help": "Number of generations to sample during evaluation."}
+    )
     
     
     advantage_offset: float = field(

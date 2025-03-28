@@ -1393,17 +1393,110 @@ class GRPOTrainer(Trainer):
             # # Only print changes if using a schedule
             # if hasattr(self.args, "temperature_schedule") and self.args.temperature_schedule is not None:
             #     print(f"Step {current_step}: Temperature is {new_temp:.4f}")
- 
+    '''
     def evaluation_loop(self, *args, **kwargs):
+        original_temp = None
+        original_num_generations = self.num_generations
+    
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            original_temp = self.sampling_params.temperature
+            original_n = self.sampling_params.n
+            self.sampling_params.temperature = self.args.eval_temperature
+            self.sampling_params.n = self.args.eval_num_generations
+        elif hasattr(self, "generation_config"):
+            original_temp = self.generation_config.temperature
+            self.generation_config.temperature = self.args.eval_temperature
+    
         self.current_phase = "eval_"
+        if self.accelerator.is_main_process:
+            print(f"Evaluation: Using temperature {self.args.eval_temperature}")
+            
+        self.num_generations = self.args.eval_num_generations
+    
         result = super().evaluation_loop(*args, **kwargs)
+        
+        self.num_generations = original_num_generations
+        
+        # Restore original temperature
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            self.sampling_params.temperature = original_temp
+            self.sampling_params.n = original_n
+        elif hasattr(self, "generation_config"):
+            self.generation_config.temperature = original_temp
+            
+    
+        
         # Clean up memory after evaluation
         if hasattr(self, "_buffered_inputs"):
             for i in range(len(self._buffered_inputs)):
                 self._buffered_inputs[i] = None
         self.current_phase = ""
         torch.cuda.empty_cache()
-        return result           
+        return result 
+    '''
+    def evaluate(
+        self,
+        eval_dataset=None,
+        ignore_keys=None,
+        metric_key_prefix="eval",
+    ):
+        """
+        Run evaluation and returns metrics.
+        
+        Overrides the Trainer.evaluate method to set evaluation-specific parameters
+        before running the evaluation loop.
+        """
+        # Store original settings
+        original_temperature = None
+        original_num_generations = self.num_generations
+        original_n = None
+        
+        # Set evaluation temperature
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            original_temperature = self.sampling_params.temperature
+            original_n = self.sampling_params.n
+            self.sampling_params.temperature = self.args.eval_temperature
+            self.sampling_params.n = self.args.eval_num_generations
+        elif hasattr(self, "generation_config"):
+            original_temperature = self.generation_config.temperature
+            self.generation_config.temperature = self.args.eval_temperature
+        
+        # Set evaluation number of generations
+        self.num_generations = self.args.eval_num_generations
+        
+        # Mark that we're in evaluation mode
+        self.current_phase = "eval_"
+        
+        if self.accelerator.is_main_process:
+            print(f"Evaluation: Using temperature {self.args.eval_temperature}, generations {self.args.eval_num_generations}")
+        
+        try:
+            # Run standard evaluation using parent class
+            metrics = super().evaluate(
+                eval_dataset=eval_dataset,
+                ignore_keys=ignore_keys,
+                metric_key_prefix=metric_key_prefix
+            )
+        finally:
+            # Restore original settings
+            self.num_generations = original_num_generations
+            if self.use_vllm and hasattr(self, "sampling_params"):
+                self.sampling_params.temperature = original_temperature
+                if original_n is not None:
+                    self.sampling_params.n = original_n
+            elif hasattr(self, "generation_config") and original_temperature is not None:
+                self.generation_config.temperature = original_temperature
+            
+            # Reset phase tracker
+            self.current_phase = ""
+            
+            # Clean up memory after evaluation
+            if hasattr(self, "_buffered_inputs"):
+                for i in range(len(self._buffered_inputs)):
+                    self._buffered_inputs[i] = None
+            torch.cuda.empty_cache()
+        
+        return metrics          
             
     def training_step(self, model, inputs, num_items_in_batch):
         # Update temperature before each training step
