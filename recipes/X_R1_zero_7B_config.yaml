@@ -33,10 +33,10 @@ max_test_samples: 100
 
 # GRPO trainer config
 epsilon: 0.02
-wandb_project: "X-R1-math"
+wandb_project: "X-R1-sgp"
 use_vllm: true
 output_dir: output/X-R1-7B
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 8
 max_prompt_length: 256
 num_generations: 7
 eval_num_generations: 7
@@ -70,8 +70,8 @@ lr_scheduler_type: constant
 max_steps: -1
 num_train_epochs: 1
 overwrite_output_dir: true
-per_device_eval_batch_size: 2
-per_device_train_batch_size: 2
+per_device_eval_batch_size: 4
+per_device_train_batch_size: 4
 push_to_hub: False
 report_to:
 - wandb
