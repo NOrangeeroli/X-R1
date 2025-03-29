@@ -950,26 +950,26 @@ class GRPOTrainer(Trainer):
                 
                 
                     
-                    # images = []
-                    # for svg_code, caption  in zip(completions_to_log, solutions_to_log):
-                    #     try:
-                    #         # Try to render the SVG code to an image
-                    #         img = render_svg_from_text(svg_code)
-                    #         if img is not None:
-                    #             # Convert PIL image to wandb compatible format
-                    #             images.append(wandb.Image(img, caption=caption))
-                    #         else:
-                    #             # If rendering fails, use a placeholder
-                    #             placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
-                    #             images.append(wandb.Image(Image.fromarray(placeholder)))
-                    #     except Exception as e:
-                    #         print(f"Error rendering SVG: {str(e)[:100]}...")
-                    #         # Create a text-based placeholder image with error message
-                    #         placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
-                    #         images.append(wandb.Image(Image.fromarray(placeholder)))
+                    images = []
+                    for svg_code, caption  in zip(completions_to_log, solutions_to_log):
+                        try:
+                            # Try to render the SVG code to an image
+                            img = render_svg_from_text(svg_code)
+                            if img is not None:
+                                # Convert PIL image to wandb compatible format
+                                images.append(wandb.Image(img, caption=caption))
+                            else:
+                                # If rendering fails, use a placeholder
+                                placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
+                                images.append(wandb.Image(Image.fromarray(placeholder)))
+                        except Exception as e:
+                            print(f"Error rendering SVG: {str(e)[:100]}...")
+                            # Create a text-based placeholder image with error message
+                            placeholder = np.zeros((100, 100, 3), dtype=np.uint8)
+                            images.append(wandb.Image(Image.fromarray(placeholder)))
                     
-                    # # Add images to the table
-                    # table["rendered_svg"] = images
+                    # Add images to the table
+                    table["rendered_svg"] = images
                             
                         
                         
@@ -1121,7 +1121,8 @@ class GRPOTrainer(Trainer):
         
         # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's computation (see
         # _generate_and_score_completions) and use per_token_logps.detach() instead.
-        old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        # old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        old_per_token_logps = inputs['ref_per_token_logps']
         ratio_diff = torch.clamp(per_token_logps - old_per_token_logps, -10.0, 10.0)
         coef_1 = torch.exp(ratio_diff)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon, 1 + self.epsilon)

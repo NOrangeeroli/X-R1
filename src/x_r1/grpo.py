@@ -69,7 +69,7 @@ class GRPOScriptArguments(ScriptArguments):
         metadata={"help": "The maximum number of samples to load from the dataset."}
     )
     reward_funcs: list[str] = field(
-        default_factory=lambda: [ "format", "accuracy"],
+        default_factory=lambda: [ "format", "accuracy", "perceptual"],
         metadata={
             "help": "List of reward functions. Possible values: 'accuracy', 'format', 'reasoning_steps', 'cosine', 'repetition_penalty', 'length'"
         },
@@ -164,7 +164,8 @@ def main(script_args, training_args, model_args):
     REWARD_FUNCS_REGISTRY = {
         "accuracy": reward_class.accuracy_reward,
         "format": reward_class.format_reward,
-        # "perceptual": reward_class.perceptual_reward,
+        "perceptual": reward_class.perceptual_reward,
+        "color": reward_class.color_reward
         # "reasoning_steps": reasoning_steps_reward,
         # "cosine": get_cosine_scaled_reward(
         #     min_value_wrong=script_args.cosine_min_value_wrong,
