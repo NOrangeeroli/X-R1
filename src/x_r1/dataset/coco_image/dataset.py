@@ -100,7 +100,7 @@ class COCOImageDataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the black and white image corresponding to the following description: {example['sentences']['raw']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['sentences']['raw']}"},
             ],
             "solution": example["sentences"]["raw"],
             "image_path": example["image_path"],  # Keep path for later loading

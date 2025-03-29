@@ -69,7 +69,7 @@ class GRPOScriptArguments(ScriptArguments):
         metadata={"help": "The maximum number of samples to load from the dataset."}
     )
     reward_funcs: list[str] = field(
-        default_factory=lambda: [ "format", "accuracy", "perceptual", "color"],
+        default_factory=lambda: [ "format", "accuracy", "perceptual"],
         metadata={
             "help": "List of reward functions. Possible values: 'accuracy', 'format', 'reasoning_steps', 'cosine', 'repetition_penalty', 'length'"
         },

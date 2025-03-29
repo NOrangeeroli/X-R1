@@ -65,7 +65,7 @@ class InstructSVGDataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the black and white image corresponding to the following description: {example['solution']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['solution']}"},
             ],
             # "solution": example["input"],
             # "svg": example["output"]
