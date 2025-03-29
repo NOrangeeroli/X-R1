@@ -1121,7 +1121,8 @@ class GRPOTrainer(Trainer):
         
         # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's computation (see
         # _generate_and_score_completions) and use per_token_logps.detach() instead.
-        old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        # old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        old_per_token_logps = inputs['ref_per_token_logps']
         ratio_diff = torch.clamp(per_token_logps - old_per_token_logps, -10.0, 10.0)
         coef_1 = torch.exp(ratio_diff)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon, 1 + self.epsilon)
