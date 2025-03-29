@@ -34,8 +34,8 @@ epsilon: 0.02
 wandb_project: "X-R1-math"
 use_vllm: true
 output_dir: output/X-R1-7B
-gradient_accumulation_steps: 16
-max_prompt_length: 1024
+gradient_accumulation_steps: 8
+max_prompt_length: 256
 num_generations: 7
 eval_num_generations: 7
 temperature: 1.0
@@ -47,7 +47,7 @@ temperature_schedule:
   steps: [[1, 1.0]] 
 advantage_offset: 0.0
 logp_variance_reg_coef: 0.0
-max_completion_length: 4096
+max_completion_length: 2048
 
 bf16: true
 vllm_device: auto
@@ -68,8 +68,8 @@ lr_scheduler_type: constant
 max_steps: -1
 num_train_epochs: 20
 overwrite_output_dir: true
-per_device_eval_batch_size: 2
-per_device_train_batch_size: 2
+per_device_eval_batch_size: 4
+per_device_train_batch_size: 4
 push_to_hub: False
 report_to:
 - wandb
