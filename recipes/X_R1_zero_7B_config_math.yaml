@@ -1,0 +1,81 @@
+# This is X-R1(https://github.com/dhcode-cpp/X-R1) project training config:
+# required >=  8 x 80G GPU
+# running time ~32h
+
+# Model arguments
+model_name_or_path: Qwen/Qwen2.5-7B
+# model_name_or_path: 5handilya/qwen2.5coder7b-svg
+model_revision: main
+torch_dtype: bfloat16
+attn_implementation: flash_attention_2
+
+# Data training arguments
+#dataset_name: xiaodongguaAIGC/X-R1-7500 # 750 / 1500 / 7500
+eval_dataset_name: HuggingFaceH4/aime_2024
+# eval_dataset_name: uwunion/instruct_svg
+
+# dataset_name: HuggingFaceM4/COCO 
+# dataset_name: SynthLabsAI/Big-Math-RL-Verified
+dataset_name: simplelr
+
+# dataset_name: simple_object
+# dataset_name: simple_relation
+# dataset_name: uoft-cs/cifar100
+# dataset_name: sgp-bench/sit_10k
+dataset_configs:
+- train
+num_processes: 7
+max_train_samples: 100000
+max_test_samples: 100
+# dataset_test_split: validation
+# dataset_test_split: test
+
+
+# GRPO trainer config
+epsilon: 0.2
+wandb_project: "X-R1-math"
+use_vllm: true
+output_dir: output/X-R1-7B
+gradient_accumulation_steps: 16
+max_prompt_length: 256
+num_generations: 7
+eval_num_generations: 1
+temperature: 1.0
+eval_temperature: 0
+top_p: 1
+temperature_schedule:
+  type: "step"
+  start: 1.0
+  steps: [[1, 1.0]] 
+advantage_offset: 0.0
+logp_variance_reg_coef: 0.0
+max_completion_length: 2048
+
+bf16: true
+vllm_device: auto
+vllm_gpu_memory_utilization: 0.7
+do_eval: false
+eval_strategy: "steps"
+eval_steps: 30
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+learning_rate: 1e-6
+log_level: info
+logging_steps: 5
+logging_strategy: steps
+log_completions: true
+
+lr_scheduler_type: constant
+max_steps: -1
+num_train_epochs: 1
+overwrite_output_dir: true
+per_device_eval_batch_size: 4
+per_device_train_batch_size: 4
+push_to_hub: False
+report_to:
+- wandb
+save_strategy: "steps"
+save_steps: 30
+seed: 42
+warmup_ratio: 0.01
