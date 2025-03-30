@@ -448,7 +448,7 @@ class SVGRawImageReward:
         ref_images = image
         
         distances = dinov2_image_image_distances_batch(ref_images, images)
-        rewards = [(1.0 - distance)*10 for distance in distances]
+        rewards = [1.0 - distance for distance in distances]
         return rewards
     @staticmethod
     def is_grayscale(image, threshold=10):
