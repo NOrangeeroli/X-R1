@@ -922,7 +922,8 @@ class GRPOTrainer(Trainer):
         self._metrics["reward_std"].append(std_grouped_rewards.mean().item())
         solutions = [x["solution"] for x in inputs]
         # print(len(solutions))
-        if self.log_completions and self.state.global_step % self.args.logging_steps == 0:
+        if self.log_completions and (self.state.global_step % self.args.logging_steps == 0 or "eval_" in getattr(self, "current_phase", "")):
+            is_eval = "eval_" in getattr(self, "current_phase", "")
             prompts_to_log = gather_object(prompts_text)
             completions_to_log = gather_object(completions_text)
             rewards_to_log = rewards.tolist()
@@ -933,13 +934,34 @@ class GRPOTrainer(Trainer):
                 if self.args.report_to and "wandb" in self.args.report_to and wandb.run is not None:
                     import pandas as pd
 
+                    prefix = "eval_" if is_eval else ""
+                    step_name = f"{prefix}completions/step_{str(self.state.global_step)}"
+                    # Track batch number for this step
+                    if not hasattr(self, "_log_batch_counter"):
+                        self._log_batch_counter = {}
+
+                    key = f"{prefix}step_{str(self.state.global_step)}"
+                    if key not in self._log_batch_counter:
+                        self._log_batch_counter[key] = 0
+                    batch_num = self._log_batch_counter[key]
+                    self._log_batch_counter[key] += 1
+
+                    # Use a unique name for each batch
+                    unique_step_name = f"{step_name}/batch_{batch_num}"
+
+                    
                     # For logging
                     table = {
-                        "step": [str(self.state.global_step)] * len(rewards),
+                        "step": [str(self.state.global_step)] * len(rewards_to_log),
                         "prompt": prompts_to_log,
                         "completion": completions_to_log,
-                        "reward": rewards.tolist(),
+                        "reward": rewards_to_log,
+                        "solution": solutions_to_log,
                     }
+
+            
+                
+                
                     
                     images = []
                     for svg_code, caption  in zip(completions_to_log, solutions_to_log):
@@ -966,7 +988,6 @@ class GRPOTrainer(Trainer):
                         
                     
                     # print(len(solutions_to_log), len(rewards.tolist()))
-                    table["solution"] = solutions_to_log
                     for i, reward_func in enumerate(self.reward_funcs):
                         if isinstance(reward_func, nn.Module):  # Module instead of PretrainedModel for compat with compiled models
                             reward_func_name = reward_func.config._name_or_path.split("/")[-1]
@@ -975,7 +996,7 @@ class GRPOTrainer(Trainer):
                         table[f"rewards/{reward_func_name}"] = rewards_per_func[:,i].tolist()
                         
                     df = pd.DataFrame(table)
-                    wandb.log({f"completions/step_{str(self.state.global_step)}": wandb.Table(dataframe=df)})
+                    wandb.log({f"{unique_step_name}": wandb.Table(dataframe=df)})
         rewards = rewards[process_slice]
         
         if self.state.global_step % 5 == 0:
@@ -1114,6 +1135,7 @@ class GRPOTrainer(Trainer):
         # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's computation (see
         # _generate_and_score_completions) and use per_token_logps.detach() instead.
         old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        # old_per_token_logps = inputs['ref_per_token_logps']
         ratio_diff = torch.clamp(per_token_logps - old_per_token_logps, -10.0, 10.0)
         coef_1 = torch.exp(ratio_diff)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon, 1 + self.epsilon)
@@ -1385,15 +1407,110 @@ class GRPOTrainer(Trainer):
             # # Only print changes if using a schedule
             # if hasattr(self.args, "temperature_schedule") and self.args.temperature_schedule is not None:
             #     print(f"Step {current_step}: Temperature is {new_temp:.4f}")
- 
+    '''
     def evaluation_loop(self, *args, **kwargs):
+        original_temp = None
+        original_num_generations = self.num_generations
+    
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            original_temp = self.sampling_params.temperature
+            original_n = self.sampling_params.n
+            self.sampling_params.temperature = self.args.eval_temperature
+            self.sampling_params.n = self.args.eval_num_generations
+        elif hasattr(self, "generation_config"):
+            original_temp = self.generation_config.temperature
+            self.generation_config.temperature = self.args.eval_temperature
+    
+        self.current_phase = "eval_"
+        if self.accelerator.is_main_process:
+            print(f"Evaluation: Using temperature {self.args.eval_temperature}")
+            
+        self.num_generations = self.args.eval_num_generations
+    
         result = super().evaluation_loop(*args, **kwargs)
+        
+        self.num_generations = original_num_generations
+        
+        # Restore original temperature
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            self.sampling_params.temperature = original_temp
+            self.sampling_params.n = original_n
+        elif hasattr(self, "generation_config"):
+            self.generation_config.temperature = original_temp
+            
+    
+        
         # Clean up memory after evaluation
         if hasattr(self, "_buffered_inputs"):
             for i in range(len(self._buffered_inputs)):
                 self._buffered_inputs[i] = None
+        self.current_phase = ""
         torch.cuda.empty_cache()
-        return result           
+        return result 
+    '''
+    def evaluate(
+        self,
+        eval_dataset=None,
+        ignore_keys=None,
+        metric_key_prefix="eval",
+    ):
+        """
+        Run evaluation and returns metrics.
+        
+        Overrides the Trainer.evaluate method to set evaluation-specific parameters
+        before running the evaluation loop.
+        """
+        # Store original settings
+        original_temperature = None
+        original_num_generations = self.num_generations
+        original_n = None
+        
+        # Set evaluation temperature
+        if self.use_vllm and hasattr(self, "sampling_params"):
+            original_temperature = self.sampling_params.temperature
+            original_n = self.sampling_params.n
+            self.sampling_params.temperature = self.args.eval_temperature
+            self.sampling_params.n = self.args.eval_num_generations
+        elif hasattr(self, "generation_config"):
+            original_temperature = self.generation_config.temperature
+            self.generation_config.temperature = self.args.eval_temperature
+        
+        # Set evaluation number of generations
+        self.num_generations = self.args.eval_num_generations
+        
+        # Mark that we're in evaluation mode
+        self.current_phase = "eval_"
+        
+        if self.accelerator.is_main_process:
+            print(f"Evaluation: Using temperature {self.args.eval_temperature}, generations {self.args.eval_num_generations}")
+        
+        try:
+            # Run standard evaluation using parent class
+            metrics = super().evaluate(
+                eval_dataset=eval_dataset,
+                ignore_keys=ignore_keys,
+                metric_key_prefix=metric_key_prefix
+            )
+        finally:
+            # Restore original settings
+            self.num_generations = original_num_generations
+            if self.use_vllm and hasattr(self, "sampling_params"):
+                self.sampling_params.temperature = original_temperature
+                if original_n is not None:
+                    self.sampling_params.n = original_n
+            elif hasattr(self, "generation_config") and original_temperature is not None:
+                self.generation_config.temperature = original_temperature
+            
+            # Reset phase tracker
+            self.current_phase = ""
+            
+            # Clean up memory after evaluation
+            if hasattr(self, "_buffered_inputs"):
+                for i in range(len(self._buffered_inputs)):
+                    self._buffered_inputs[i] = None
+            torch.cuda.empty_cache()
+        
+        return metrics          
             
     def training_step(self, model, inputs, num_items_in_batch):
         # Update temperature before each training step

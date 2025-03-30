@@ -265,20 +265,23 @@ def svg_to_image(svg_code):
     # to try to recover as much as possible from broken XML.
     
     try:
-        parser = etree.XMLParser(recover=True)
+        # parser = etree.XMLParser(recover=True)
         
         
         
-        tree = etree.fromstring(svg_code.encode('utf-8'), parser)
-        valid_svg = etree.tostring(tree)
+        # tree = etree.fromstring(svg_code.encode('utf-8'), parser)
+        # valid_svg = etree.tostring(tree)
         
         
-        # doitReturnValue = func_timeout(5, cairosvg.svg2png, args=(valid_svg,))
-        png_data = cairosvg.svg2png(bytestring=valid_svg)
+        
+        # png_data = cairosvg.svg2png(bytestring=valid_svg)
+        png_data = cairosvg.svg2png(bytestring=svg_code.encode('utf-8'))
         image = Image.open(BytesIO(png_data))
+        print("Success converting SVG to image")
         return image
     except Exception as e:
-        # print(f"Error converting SVG to image: {e}")
+        print(f"Error converting SVG to image: {e}")
+        print(svg_code)
         # black_image = Image.new('RGB', (256, 256), color='black')
         return None
 

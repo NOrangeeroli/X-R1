@@ -27,6 +27,7 @@ class InstructSVGDataset:
         Load the dataset from HuggingFace or local source
         """
         dataset = load_dataset(dataset_name)
+        dataset['test'] = dataset['train']
         for split in dataset:
             if "solution" in dataset[split].column_names:
                 dataset[split] = dataset[split].remove_columns("solution")
@@ -50,7 +51,7 @@ class InstructSVGDataset:
         
         if max_test_samples and max_test_samples > 0:       
             for split in dataset:
-                if split == "validation":
+                if split == "test":
                     dataset[split] = dataset[split].select(range(min(max_test_samples, len(dataset[split]))))    
         return dataset
     

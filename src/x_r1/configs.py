@@ -33,6 +33,16 @@ class GRPOConfig(trl.GRPOConfig):
                     "variance in log probabilities among completions with the same high reward value."
         },
     )
+    eval_temperature: float = field(
+        default=1.0,
+        metadata={
+            "help": "Temperature used for generation during evaluation. Lower values make outputs more deterministic."
+        },
+    )
+    eval_num_generations: int = field(
+        default=1,
+        metadata={"help": "Number of generations to sample during evaluation."}
+    )
     
     
     advantage_offset: float = field(

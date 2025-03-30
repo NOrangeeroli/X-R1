@@ -165,6 +165,7 @@ def main(script_args, training_args, model_args):
         "accuracy": reward_class.accuracy_reward,
         "format": reward_class.format_reward,
         "perceptual": reward_class.perceptual_reward,
+        "color": reward_class.color_reward
         # "reasoning_steps": reasoning_steps_reward,
         # "cosine": get_cosine_scaled_reward(
         #     min_value_wrong=script_args.cosine_min_value_wrong,
@@ -212,8 +213,10 @@ def main(script_args, training_args, model_args):
     if script_args.eval_dataset_name is not None:
             eval_dataset = get_dataset_class(script_args.eval_dataset_name)().load_dataset(
             script_args.eval_dataset_name, 
+            script_args.dataset_config, 
+            script_args.max_train_samples, 
             script_args.max_test_samples
-        )
+        )[script_args.dataset_test_split]
     else:
         eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None
     if eval_dataset is not None:
