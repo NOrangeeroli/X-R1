@@ -426,7 +426,7 @@ class SVGRawImageReward:
         # debug_print("start accuracy_reward")
         
         completion_contents = [completion[0]["content"] for completion in completions]
-        ans = [SVGReward.extract_svg(content) for content in completion_contents]
+        ans = [SVGRawImageReward.extract_svg(content) for content in completion_contents]
         # ans = completion_contents
         rewards = []
         # debug_print(ans)
@@ -442,7 +442,7 @@ class SVGRawImageReward:
         
         
         completion_contents = [completion[0]["content"] for completion in completions]
-        ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
+        ans = [SVGRawImageReward.extract_svg(content) for content in completion_contents]
         # ans = completion_contents
         rewards = []
         images = [safe_svg_to_image(content) for content in ans]
