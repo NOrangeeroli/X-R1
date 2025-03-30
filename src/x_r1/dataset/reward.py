@@ -360,7 +360,7 @@ class SVGRawImageReward:
         if match:
             return match.group(1).strip()
         else:
-            return SVGReward.extract_answer_half(text)
+            return SVGRawImageReward.extract_answer_half(text)
     @staticmethod
     def extract_answer_half(text):
         """Extract content between <answer> tags."""
@@ -376,9 +376,9 @@ class SVGRawImageReward:
             return ""
         # ans = SVGReward.extract_answer(text)
         ans = text
-        match = re.search(r'(<svg .*?</svg>)', ans, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+        matches = re.findall(r'(<svg .*?</svg>)', ans, re.DOTALL)
+        if matches:
+            return matches[-1].strip()
         else:
             match = re.search(r'(<svg.*?)', ans, re.DOTALL)
             if match:
@@ -392,26 +392,23 @@ class SVGRawImageReward:
         
         
         # Check if the overall structure is correct
-        # structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
+        structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
         
         # Count occurrences of each tag
-        # think_open_count = content.count("<think>")
-        # think_close_count = content.count("</think>")
-        # answer_open_count = content.count("<answer>")
-        # answer_close_count = content.count("</answer>")
+        think_open_count = content.count("<think>")
+        think_close_count = content.count("</think>")
+        answer_open_count = content.count("<answer>")
+        answer_close_count = content.count("</answer>")
         
         # Check if exactly one of each tag exists
-        # tags_valid = (
-            # think_open_count == 1 and 
-            #         think_close_count == 1 and 
-            #         answer_open_count == 1 and 
-            #         answer_close_count == 1)
+        tags_valid = (think_open_count == 1 and 
+                    think_close_count == 1 and 
+                    answer_open_count == 1 and 
+                    answer_close_count == 1)
         no_text = "</text>" not in content    
         # Reward is 1.0 only if both structure and tag counts are correct
         
-        reward = 0.5 if (
-            # structure_match and tags_valid and 
-            no_text) else 0.0
+        reward = 0.5 if (structure_match and tags_valid and no_text) else 0.0
         # reward = 0.5 if no_text else 0.0
         
         
@@ -420,7 +417,7 @@ class SVGRawImageReward:
     @staticmethod
     def format_reward(completions, **kwargs):
         """Reward function that checks if the completion has a specific format with exactly one of each tag."""
-        return [SVGReward.single_format_reward(completion[0]["content"]) for completion in completions]
+        return [SVGRawImageReward.single_format_reward(completion[0]["content"]) for completion in completions]
         
 
     @staticmethod
@@ -430,6 +427,7 @@ class SVGRawImageReward:
         
         completion_contents = [completion[0]["content"] for completion in completions]
         ans = [SVGReward.extract_svg(content) for content in completion_contents]
+        # ans = completion_contents
         rewards = []
         # debug_print(ans)
         images = [safe_svg_to_image(content) for content in ans]
@@ -445,7 +443,7 @@ class SVGRawImageReward:
         
         completion_contents = [completion[0]["content"] for completion in completions]
         ans = [SVGImageReward.extract_svg(content) for content in completion_contents]
-        
+        # ans = completion_contents
         rewards = []
         images = [safe_svg_to_image(content) for content in ans]
         ref_images = image

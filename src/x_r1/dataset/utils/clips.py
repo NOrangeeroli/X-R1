@@ -277,11 +277,11 @@ def svg_to_image(svg_code):
         # png_data = cairosvg.svg2png(bytestring=valid_svg)
         png_data = cairosvg.svg2png(bytestring=svg_code.encode('utf-8'))
         image = Image.open(BytesIO(png_data))
-        print("Success converting SVG to image")
+        # print("Success converting SVG to image")
         return image
     except Exception as e:
         print(f"Error converting SVG to image: {e}")
-        print(svg_code)
+        # print(svg_code)
         # black_image = Image.new('RGB', (256, 256), color='black')
         return None
 

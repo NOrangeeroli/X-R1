@@ -2,7 +2,7 @@ from typing import Dict, List, Optional, Union, Any
 from datasets import load_dataset, Dataset, IterableDataset
 import torch
 SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+     "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
     "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
     "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
     "<think> reasoning process here </think>\n<answer> answer here </answer>"
@@ -65,7 +65,7 @@ class InstructSVGDataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['solution']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description, please add comments in <!-- -->  explaining your thoughts before each visual elements: {example['solution']}"},
             ],
             # "solution": example["input"],
             # "svg": example["output"]

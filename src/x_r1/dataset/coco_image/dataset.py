@@ -8,7 +8,10 @@ import pandas as pd
 from PIL import Image
 
 SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it.  The Assistant communicates in speaking mode by default but switches to thinking mode when deeper processing is needed. Wrap the thinking process in <!-- -->, while all content outside remains in speaking mode."
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think>\n<answer> answer here </answer>"
 )
 
 class COCOImageDataset:
@@ -97,7 +100,7 @@ class COCOImageDataset:
         return {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description: {example['sentences']['raw']}"},
+                {"role": "user", "content": f"Please write SVG code for generating the image corresponding to the following description, please write with comments in <!-- -->  explaining your thoughts before each visual elements: {example['sentences']['raw']}"},
             ],
             "solution": example["sentences"]["raw"],
             "image_path": example["image_path"],  # Keep path for later loading

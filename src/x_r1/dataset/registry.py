@@ -98,7 +98,7 @@ def get_reward_class(reward_name: str) -> Type[Any]:
     elif reward_name == "uoft-cs/cifar100":
         reward_name = "svg"
     elif reward_name == "uwunion/instruct_svg":
-        reward_name = "svg"
+        reward_name = "svg_raw_image"
         
     elif reward_name == "sgp-bench/sit_10k":
         reward_name = "svg"
