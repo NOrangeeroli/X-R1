@@ -534,6 +534,7 @@ class GRPOTrainer(Trainer):
         for i, reward_func in enumerate(self.reward_funcs):
             if isinstance(reward_func, PreTrainedModel):
                 self.reward_funcs[i] = self.accelerator.prepare_model(reward_func, evaluation_mode=True)
+        assert self.args.max_grad_norm is not None, "max_grad_norm must be set in GRPO"
 
     def _set_signature_columns_if_needed(self):
         # If `self.args.remove_unused_columns` is True, non-signature columns are removed.

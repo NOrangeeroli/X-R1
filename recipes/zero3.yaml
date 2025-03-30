@@ -3,6 +3,7 @@ debug: false
 deepspeed_config:
   deepspeed_multinode_launcher: standard
   offload_optimizer_device: cpu
+  gradient_clipping: 0.1
   offload_param_device: cpu
   zero3_init_flag: true
   zero3_save_16bit_model: true
@@ -26,6 +27,7 @@ deepspeed_config:
     reduce_scatter: true
     reduce_bucket_size: 5e8
     allgather_bucket_size: 5e8
+    
  
 
   gradient_checkpointing: true
