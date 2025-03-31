@@ -152,14 +152,40 @@ class Reward:
     
     
     @staticmethod
+    def single_format_reward(content, **kwargs):
+        """Reward function that checks if the completion has a specific format with exactly one of each tag."""
+        # content = completion[0]["content"]
+        
+        
+        # Check if the overall structure is correct
+        structure_match = re.match(r"^<think>.*?</think>\n<answer>.*?</answer>$", content, re.DOTALL)
+        
+        # Count occurrences of each tag
+        think_open_count = content.count("<think>")
+        think_close_count = content.count("</think>")
+        answer_open_count = content.count("<answer>")
+        answer_close_count = content.count("</answer>")
+        
+        # Check if exactly one of each tag exists
+        tags_valid = (think_open_count == 1 and 
+                    think_close_count == 1 and 
+                    answer_open_count == 1 and 
+                    answer_close_count == 1)
+        
+        # Reward is 1.0 only if both structure and tag counts are correct
+        
+        reward = 1.0 if (structure_match and tags_valid) else 0.0
+        # reward = 0.5 if no_text else 0.0
+        
+        
+        return reward
+ 
+    @staticmethod
     def format_reward(completions, **kwargs):
-        """Reward function that checks if the completion has a specific format."""
-        pattern = r"^<think>.*?</think><answer>.*?</answer>$"
-        completion_contents = [completion[0]["content"] for completion in completions]
-        matches = [re.match(pattern, content) for content in completion_contents]
+        """Reward function that checks if the completion has a specific format with exactly one of each tag."""
+        return [Reward.single_format_reward(completion[0]["content"]) for completion in completions]
+        
 
-        rewards = [1.0 if match else 0.0 for match in matches]
-        return rewards
     
     
 from .utils.clips import  safe_svg_to_image,clip_text_image_distances_batch, clip_image_image_distances_batch, clip_image_image_pixel_distances_batch,vgg_image_image_distances_batch,dinov2_image_image_distances_batch,siglip_text_image_distances_batch
