@@ -534,6 +534,7 @@ class GRPOTrainer(Trainer):
         for i, reward_func in enumerate(self.reward_funcs):
             if isinstance(reward_func, PreTrainedModel):
                 self.reward_funcs[i] = self.accelerator.prepare_model(reward_func, evaluation_mode=True)
+        assert self.args.max_grad_norm is not None, "max_grad_norm must be set in GRPO"
 
     def _set_signature_columns_if_needed(self):
         # If `self.args.remove_unused_columns` is True, non-signature columns are removed.
@@ -936,6 +937,19 @@ class GRPOTrainer(Trainer):
 
                     prefix = "eval_" if is_eval else ""
                     step_name = f"{prefix}completions/step_{str(self.state.global_step)}"
+                    # Track batch number for this step
+                    if not hasattr(self, "_log_batch_counter"):
+                        self._log_batch_counter = {}
+
+                    key = f"{prefix}step_{str(self.state.global_step)}"
+                    if key not in self._log_batch_counter:
+                        self._log_batch_counter[key] = 0
+                    batch_num = self._log_batch_counter[key]
+                    self._log_batch_counter[key] += 1
+
+                    # Use a unique name for each batch
+                    unique_step_name = f"{step_name}/batch_{batch_num}"
+
                     
                     # For logging
                     table = {
@@ -983,7 +997,7 @@ class GRPOTrainer(Trainer):
                         table[f"rewards/{reward_func_name}"] = rewards_per_func[:,i].tolist()
                         
                     df = pd.DataFrame(table)
-                    wandb.log({f"{step_name}": wandb.Table(dataframe=df)})
+                    wandb.log({f"{unique_step_name}": wandb.Table(dataframe=df)})
         rewards = rewards[process_slice]
         
         if self.state.global_step % 5 == 0:
@@ -1121,8 +1135,8 @@ class GRPOTrainer(Trainer):
         
         # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's computation (see
         # _generate_and_score_completions) and use per_token_logps.detach() instead.
-        # old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
-        old_per_token_logps = inputs['ref_per_token_logps']
+        old_per_token_logps = inputs["old_per_token_logps"] if self.num_iterations > 1 else per_token_logps.detach()
+        # old_per_token_logps = inputs['ref_per_token_logps']
         ratio_diff = torch.clamp(per_token_logps - old_per_token_logps, -10.0, 10.0)
         coef_1 = torch.exp(ratio_diff)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon, 1 + self.epsilon)
