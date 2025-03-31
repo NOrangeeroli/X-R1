@@ -132,7 +132,7 @@ class Reward:
                 print('-'*100)
                 print(f"\nanswer text: {answer_text}\n")
                 print(f"\solution text: {sol}\n")
-                print('\nanswer_parsed:', answer_parsed, '\ngold_parsed:', gold_parsed, '\nreward:', reward, '\n')
+                print('\nanswer_parsed:', answer_parsed, answer_parsed2, '\ngold_parsed:', gold_parsed, gold_parsed2,'\nreward:', reward, '\n')
             else:
                 # For medical text answers, extract from <answer> tags and use GPT4O-mini for evaluation
                 # answer_content = XDGReward.extract_answer(content)
